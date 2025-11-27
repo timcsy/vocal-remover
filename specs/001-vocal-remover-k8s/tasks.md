@@ -38,16 +38,16 @@
 
 **⚠️ 重要**: 此階段完成前，不能開始任何使用者故事
 
-- [ ] T007 建立 backend/app/models/job.py（Job、Result、JobStatus 資料模型）
-- [ ] T008 [P] 建立 backend/app/core/rate_limit.py（IP 限流邏輯，12 次/小時）
-- [ ] T009 [P] 建立 backend/app/services/storage.py（MinIO 儲存服務）
-- [ ] T010 建立 backend/app/main.py（FastAPI 應用程式入口）
-- [ ] T011 建立 backend/app/api/v1/health.py（健康檢查 API）
-- [ ] T012 建立 backend/app/services/separator.py（Demucs 人聲分離服務）
-- [ ] T013 建立 backend/app/services/merger.py（FFmpeg 影片合併服務）
-- [ ] T014 建立 backend/app/workers/tasks.py（RQ 任務定義框架）
-- [ ] T015 建立 frontend/src/services/api.ts（API 呼叫封裝）
-- [ ] T016 建立 frontend/src/App.vue（主要應用程式框架）
+- [x] T007 建立 backend/app/models/job.py（Job、Result、JobStatus 資料模型）
+- [x] T008 [P] 建立 backend/app/core/rate_limit.py（IP 限流邏輯，12 次/小時）
+- [x] T009 [P] 建立 backend/app/services/storage.py（MinIO 儲存服務）
+- [x] T010 建立 backend/app/main.py（FastAPI 應用程式入口）
+- [x] T011 建立 backend/app/api/v1/health.py（健康檢查 API）
+- [x] T012 建立 backend/app/services/separator.py（Demucs 人聲分離服務）
+- [x] T013 建立 backend/app/services/merger.py（FFmpeg 影片合併服務）
+- [x] T014 建立 backend/app/workers/tasks.py（RQ 任務定義框架）
+- [x] T015 建立 frontend/src/services/api.ts（API 呼叫封裝）
+- [x] T016 建立 frontend/src/App.vue（主要應用程式框架）
 
 **Checkpoint**: 基礎架構就緒，使用者故事實作可開始
 
