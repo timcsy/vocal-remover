@@ -1,0 +1,32 @@
+# Web framework
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+
+# Task queue
+rq==1.15.1
+redis==5.0.1
+
+# Storage
+boto3==1.33.0
+
+# YouTube download
+yt-dlp==2023.11.16
+
+# Audio/Video processing
+demucs==4.0.1
+torch>=2.0.0
+torchaudio>=2.0.0
+moviepy==1.0.3
+ffmpeg-python==0.2.0
+
+# Utilities
+pydantic==2.5.2
+pydantic-settings==2.1.0
+python-dotenv==1.0.0
+aiofiles==23.2.1
+
+# Development
+pytest==7.4.3
+pytest-asyncio==0.21.1
+httpx==0.25.2

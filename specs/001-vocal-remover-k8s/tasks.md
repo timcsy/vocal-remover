@@ -23,12 +23,12 @@
 
 **目的**: 專案初始化與基本結構
 
-- [ ] T001 建立專案目錄結構（backend/、frontend/、k8s/）
-- [ ] T002 初始化後端 Python 專案，建立 backend/requirements.txt
-- [ ] T003 [P] 初始化前端 Vue 3 專案，建立 frontend/package.json
-- [ ] T004 [P] 建立 backend/Dockerfile
-- [ ] T005 [P] 建立 frontend/Dockerfile
-- [ ] T006 建立 backend/app/core/config.py 配置管理（環境變數讀取）
+- [x] T001 建立專案目錄結構（backend/、frontend/、k8s/）
+- [x] T002 初始化後端 Python 專案，建立 backend/requirements.txt
+- [x] T003 [P] 初始化前端 Vue 3 專案，建立 frontend/package.json
+- [x] T004 [P] 建立 backend/Dockerfile
+- [x] T005 [P] 建立 frontend/Dockerfile
+- [x] T006 建立 backend/app/core/config.py 配置管理（環境變數讀取）
 
 ---
 
