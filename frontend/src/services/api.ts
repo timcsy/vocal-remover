@@ -66,10 +66,9 @@ class ApiService {
 
   async createJobFromUpload(file: File): Promise<Job> {
     const formData = new FormData();
-    formData.append('source_type', 'upload');
     formData.append('file', file);
 
-    const response = await fetch(`${API_BASE}/jobs`, {
+    const response = await fetch(`${API_BASE}/jobs/upload`, {
       method: 'POST',
       body: formData,
     });

@@ -2,6 +2,7 @@
 import { ref, onUnmounted } from 'vue';
 import { api, type Job, type JobWithResult } from './services/api';
 import UrlInput from './components/UrlInput.vue';
+import FileUpload from './components/FileUpload.vue';
 import ResultView from './components/ResultView.vue';
 
 // 應用程式狀態
@@ -86,7 +87,10 @@ onUnmounted(() => {
           @job-created="handleJobCreated"
           @error="handleError"
         />
-        <!-- FileUpload 將在 Phase 4 加入 -->
+        <FileUpload
+          @job-created="handleJobCreated"
+          @error="handleError"
+        />
       </div>
 
       <!-- 進度和結果區域 - 當有任務時顯示 -->

@@ -198,7 +198,92 @@ def process_upload_job(job_id: str):
     """
     處理上傳任務
 
-    流程：分離人聲 → 合併 → 上傳結果
+    流程：下載上傳檔案 → 提取音頻 → 分離人聲 → 合併 → 上傳結果
     """
-    # 將在 Phase 4 (US2) 中實作完整邏輯
-    pass
+    from app.services.separator import get_separator
+    from app.services.merger import get_merger
+
+    job = get_job_from_redis(job_id)
+    if not job:
+        return
+
+    temp_dir = None
+    try:
+        # 建立暫存目錄
+        temp_dir = tempfile.mkdtemp()
+
+        # === 階段 1: 從 MinIO 下載上傳檔案 ===
+        update_job_progress(job_id, 0, "下載檔案中...", JobStatus.DOWNLOADING)
+
+        storage = get_storage_service()
+        ext = os.path.splitext(job.source_url)[1] if job.source_url else '.mp4'
+        video_path = os.path.join(temp_dir, f"input{ext}")
+        storage.download_file(job.source_url, video_path)
+
+        # === 階段 2: 提取音頻 ===
+        update_job_progress(job_id, 10, "提取音頻中...", JobStatus.SEPARATING)
+
+        merger = get_merger()
+        audio_path = os.path.join(temp_dir, "audio.wav")
+        merger.extract_audio(video_path, audio_path)
+
+        # 取得影片時長
+        video_info = merger.get_video_info(video_path)
+        original_duration = int(video_info.get('duration', 0))
+
+        # 更新 job 的時長資訊
+        job = get_job_from_redis(job_id)
+        if job:
+            job.original_duration = original_duration
+            save_job_to_redis(job)
+
+        # === 階段 3: 分離人聲 ===
+        update_job_progress(job_id, 20, "分離人聲中...", JobStatus.SEPARATING)
+
+        separator = get_separator()
+        separation_dir = os.path.join(temp_dir, "separated")
+
+        def separation_progress(progress, stage):
+            # 分離佔 20-70%
+            update_job_progress(job_id, 20 + int(progress * 0.5), stage)
+
+        separation_result = separator.separate(
+            input_path=audio_path,
+            output_dir=separation_dir,
+            progress_callback=separation_progress
+        )
+
+        background_audio = separation_result["background"]
+
+        # === 階段 4: 合併影片 ===
+        update_job_progress(job_id, 70, "合併影片中...", JobStatus.MERGING)
+
+        output_path = os.path.join(temp_dir, "output.mp4")
+
+        def merge_progress(progress, stage):
+            # 合併佔 70-90%
+            update_job_progress(job_id, 70 + int(progress * 0.2), stage)
+
+        merger.process_video(
+            input_video_path=video_path,
+            background_audio_path=background_audio,
+            output_path=output_path,
+            progress_callback=merge_progress
+        )
+
+        # === 階段 5: 上傳結果 ===
+        update_job_progress(job_id, 90, "上傳結果中...")
+
+        result_key = f"results/{job_id}/output.mp4"
+        storage.upload_file(output_path, result_key)
+
+        # 完成
+        complete_job(job_id, result_key)
+
+    except Exception as e:
+        fail_job(job_id, str(e))
+        raise
+    finally:
+        # 清理暫存目錄
+        if temp_dir and os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir, ignore_errors=True)

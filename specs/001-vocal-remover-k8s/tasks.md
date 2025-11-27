@@ -82,10 +82,10 @@
 
 ### 實作 User Story 2
 
-- [ ] T025 [US2] 在 backend/app/api/v1/jobs.py 擴充 POST /jobs 支援 multipart/form-data 上傳
-- [ ] T026 [US2] 在 backend/app/workers/tasks.py 實作 process_upload_job 任務（分離→合併流程）
-- [ ] T027 [US2] 建立 frontend/src/components/FileUpload.vue（檔案上傳元件，含拖放支援）
-- [ ] T028 [US2] 整合前端 FileUpload 到 App.vue
+- [x] T025 [US2] 在 backend/app/api/v1/jobs.py 擴充 POST /jobs 支援 multipart/form-data 上傳
+- [x] T026 [US2] 在 backend/app/workers/tasks.py 實作 process_upload_job 任務（分離→合併流程）
+- [x] T027 [US2] 建立 frontend/src/components/FileUpload.vue（檔案上傳元件，含拖放支援）
+- [x] T028 [US2] 整合前端 FileUpload 到 App.vue
 
 **Checkpoint**: User Story 1 和 2 都應可獨立運作
 
