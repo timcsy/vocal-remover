@@ -1,0 +1,221 @@
+openapi: 3.0.3
+info:
+  title: 人聲去除服務 API
+  description: 提供 YouTube 網址或上傳影片，去除人聲並產生伴奏影片
+  version: 1.0.0
+
+servers:
+  - url: /api/v1
+    description: API 伺服器
+
+paths:
+  /jobs:
+    post:
+      summary: 建立處理任務
+      description: 提交 YouTube 網址或上傳影片進行人聲去除處理
+      operationId: createJob
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateJobFromUrl'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CreateJobFromUpload'
+      responses:
+        '201':
+          description: 任務建立成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+        '400':
+          description: 請求無效（網址格式錯誤、檔案格式不支援等）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: 請求頻率超過限制
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /jobs/{jobId}:
+    get:
+      summary: 查詢任務狀態
+      description: 取得指定任務的處理狀態和進度
+      operationId: getJob
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 任務資訊
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobWithResult'
+        '404':
+          description: 任務不存在或已過期
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /jobs/{jobId}/download:
+    get:
+      summary: 下載處理結果
+      description: 取得處理完成的影片下載連結
+      operationId: downloadResult
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '302':
+          description: 重新導向至下載連結
+          headers:
+            Location:
+              schema:
+                type: string
+                format: uri
+        '400':
+          description: 任務尚未完成
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: 任務不存在或已過期
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /health:
+    get:
+      summary: 健康檢查
+      description: 檢查服務是否正常運作
+      operationId: healthCheck
+      responses:
+        '200':
+          description: 服務健康
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+
+components:
+  schemas:
+    CreateJobFromUrl:
+      type: object
+      required:
+        - source_type
+        - source_url
+      properties:
+        source_type:
+          type: string
+          enum: [youtube]
+        source_url:
+          type: string
+          format: uri
+          example: https://www.youtube.com/watch?v=dQw4w9WgXcQ
+
+    CreateJobFromUpload:
+      type: object
+      required:
+        - source_type
+        - file
+      properties:
+        source_type:
+          type: string
+          enum: [upload]
+        file:
+          type: string
+          format: binary
+          description: 影片檔案（MP4、MOV、AVI、MKV，最大 500MB）
+
+    Job:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        source_type:
+          type: string
+          enum: [youtube, upload]
+        status:
+          type: string
+          enum: [pending, downloading, separating, merging, completed, failed]
+        progress:
+          type: integer
+          minimum: 0
+          maximum: 100
+        current_stage:
+          type: string
+          example: 正在分離人聲...
+        error_message:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+
+    JobWithResult:
+      allOf:
+        - $ref: '#/components/schemas/Job'
+        - type: object
+          properties:
+            result:
+              $ref: '#/components/schemas/Result'
+
+    Result:
+      type: object
+      nullable: true
+      properties:
+        original_duration:
+          type: integer
+          description: 原始影片長度（秒）
+        output_size:
+          type: integer
+          description: 輸出檔案大小（bytes）
+        download_url:
+          type: string
+          format: uri
+          description: 下載連結（有效期 1 小時）
+
+    Error:
+      type: object
+      properties:
+        code:
+          type: string
+          example: RATE_LIMIT_EXCEEDED
+        message:
+          type: string
+          example: 每小時最多 12 次請求，請稍後再試
+
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, unhealthy]
+        redis:
+          type: boolean
+        storage:
+          type: boolean
+        version:
+          type: string
