@@ -112,16 +112,16 @@
 
 **目的**: 將服務部署到 Kubernetes 環境
 
-- [ ] T033 [P] 建立 k8s/namespace.yaml
-- [ ] T034 [P] 建立 k8s/configmap.yaml（環境配置）
-- [ ] T035 [P] 建立 k8s/secrets.yaml（MinIO 認證資訊）
-- [ ] T036 [P] 建立 k8s/redis/statefulset.yaml 和 k8s/redis/service.yaml
-- [ ] T037 [P] 建立 k8s/minio/statefulset.yaml 和 k8s/minio/service.yaml
-- [ ] T038 [P] 建立 k8s/api/deployment.yaml 和 k8s/api/service.yaml
-- [ ] T039 [P] 建立 k8s/worker/deployment.yaml（含 GPU 資源請求）
-- [ ] T040 [P] 建立 k8s/worker/keda-scaler.yaml（KEDA 自動擴展）
-- [ ] T041 [P] 建立 k8s/frontend/deployment.yaml 和 k8s/frontend/service.yaml
-- [ ] T042 建立 k8s/ingress.yaml（路由配置）
+- [x] T033 [P] 建立 k8s/namespace.yaml
+- [x] T034 [P] 建立 k8s/configmap.yaml（環境配置）
+- [x] T035 [P] 建立 k8s/secrets.yaml（MinIO 認證資訊）
+- [x] T036 [P] 建立 k8s/redis/statefulset.yaml 和 k8s/redis/service.yaml
+- [x] T037 [P] 建立 k8s/minio/statefulset.yaml 和 k8s/minio/service.yaml
+- [x] T038 [P] 建立 k8s/api/deployment.yaml 和 k8s/api/service.yaml
+- [x] T039 [P] 建立 k8s/worker/deployment.yaml（含 GPU 資源請求）
+- [x] T040 [P] 建立 k8s/worker/keda-scaler.yaml（KEDA 自動擴展）
+- [x] T041 [P] 建立 k8s/frontend/deployment.yaml 和 k8s/frontend/service.yaml
+- [x] T042 建立 k8s/ingress.yaml（路由配置）
 
 **Checkpoint**: 服務可在 Kubernetes 環境運行
 
