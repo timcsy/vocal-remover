@@ -1,50 +1,114 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+<!--
+同步影響報告 (Sync Impact Report)
+=================================
+版本變更: 0.0.0 → 1.0.0 (MAJOR - 首次建立)
+修改的原則: 無（首次建立）
+新增區段:
+  - 核心原則（6 項）
+  - 開發工作流程
+  - 治理
+移除區段: 無
+模板更新狀態:
+  - .specify/templates/plan-template.md: ✅ 無需更新（已包含 Constitution Check）
+  - .specify/templates/spec-template.md: ✅ 無需更新
+  - .specify/templates/tasks-template.md: ✅ 無需更新
+  - .specify/templates/checklist-template.md: ✅ 無需更新
+  - .specify/templates/agent-file-template.md: ✅ 無需更新
+延遲項目: 無
+-->
 
-## Core Principles
+# Sing 專案憲法
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+## 核心原則
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+### I. 繁體中文優先
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+所有規格文件、計畫文件、任務清單及相關技術文件 MUST 使用繁體中文撰寫。
+程式碼中的註解可使用英文，但面向使用者的文件內容必須為繁體中文。
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+**理由**：確保團隊溝通一致性，降低語言障礙造成的誤解。
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+### II. 簡潔設計（不過度設計）
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+實作 MUST 只包含當前需求直接要求的功能。禁止為「未來可能需要」的功能預先設計抽象層或擴展點。
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+- 每個功能模組 MUST 有明確的使用場景
+- 避免建立只為「組織性」目的而存在的檔案或資料夾
+- 三行相似的程式碼優於一個過早的抽象
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+**理由**：過度設計增加維護成本，降低可讀性。YAGNI（You Aren't Gonna Need It）原則。
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+### III. 最小文件產出
 
-## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
+除非使用者明確要求，否則 MUST NOT 建立新的 Markdown 文件來記錄變更或總結工作。
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+- 不主動建立 CHANGELOG、SUMMARY 或類似的紀錄文件
+- 不主動建立 README 文件
+- 規格相關文件僅限於 `/specs/` 目錄下的必要檔案
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+**理由**：減少文件膨脹，專注於實際交付價值的工作。
+
+### IV. Git 版本控制紀律
+
+每個開發階段 MUST 確保 git 操作正確執行：
+
+- 規格完成後：提交規格文件
+- 計畫完成後：提交計畫文件
+- 每個任務完成後：提交相關變更
+- 遵循有意義的提交訊息格式
+
+**理由**：良好的版本控制習慣確保可追溯性和團隊協作效率。
+
+### V. 任務追蹤完整性
+
+在 implement 階段，tasks.md 中的任務 MUST 在完成後立即標記為完成（打勾）。
+
+- 每完成一個任務就更新其狀態
+- 不要批次更新多個任務的完成狀態
+- 任務狀態必須即時反映實際進度
+
+**理由**：即時更新確保進度可見性，避免遺漏未完成的工作。
+
+### VI. 規格文件保護
+
+在 implement 階段，MUST NOT 意外刪除或覆蓋規格文件。
+
+- 套用框架模板時特別注意不要覆蓋 `/specs/` 目錄
+- 在執行批次檔案操作前檢查目標路徑
+- 規格文件（spec.md, plan.md, tasks.md 等）一旦建立，僅能透過明確的編輯操作修改
+
+**理由**：規格文件是實作的根基，意外遺失將導致專案方向混亂。
+
+## 開發工作流程
+
+### 執行流程
+
+1. **specify** - 建立功能規格（使用繁體中文）
+2. **clarify** - 釐清規格中的模糊點
+3. **plan** - 產生實作計畫
+4. **tasks** - 產生任務清單
+5. **implement** - 執行任務並即時更新完成狀態
+
+### 各階段檢查點
+
+- 進入下一階段前 MUST 確認當前階段的文件已 git commit
+- implement 階段開始前 MUST 確認規格文件存在且完整
+- 每個任務完成後 MUST 更新 tasks.md 並 git commit
+
+## 治理
+
+本憲法優先於所有其他開發實踐。任何與憲法衝突的做法必須先修訂憲法。
+
+### 修訂程序
+
+1. 提出修訂建議並說明理由
+2. 評估對現有原則和工作流程的影響
+3. 更新憲法版本號（遵循語意化版本規則）
+4. 更新相關模板以保持一致性
+
+### 合規審查
+
+- 所有 PR/Review MUST 驗證是否符合憲法原則
+- 違反原則的複雜度必須有明確的正當理由
+
+**Version**: 1.0.0 | **Ratified**: 2025-11-27 | **Last Amended**: 2025-11-27
