@@ -99,10 +99,10 @@
 
 ### 實作 User Story 3
 
-- [ ] T029 [US3] 在 backend/app/workers/tasks.py 加入進度更新邏輯（更新 Job.progress 和 current_stage）
-- [ ] T030 [US3] 建立 frontend/src/components/ProgressBar.vue（進度條元件，顯示階段與預估時間）
-- [ ] T031 [US3] 在前端實作輪詢機制，定期查詢 GET /jobs/{jobId} 更新進度
-- [ ] T032 [US3] 整合 ProgressBar 到結果頁面流程
+- [x] T029 [US3] 在 backend/app/workers/tasks.py 加入進度更新邏輯（更新 Job.progress 和 current_stage）
+- [x] T030 [US3] 建立 frontend/src/components/ProgressBar.vue（進度條元件，顯示階段與預估時間）
+- [x] T031 [US3] 在前端實作輪詢機制，定期查詢 GET /jobs/{jobId} 更新進度
+- [x] T032 [US3] 整合 ProgressBar 到結果頁面流程
 
 **Checkpoint**: 所有使用者故事應已獨立可用
 

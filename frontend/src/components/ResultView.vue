@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { api, type JobWithResult } from '../services/api';
+import ProgressBar from './ProgressBar.vue';
 
 const props = defineProps<{
   job: JobWithResult;
@@ -72,10 +73,11 @@ const durationText = computed(() => {
         <div class="spinner"></div>
       </div>
       <h2>{{ statusText }}</h2>
-      <p class="progress-text">{{ progressText }}</p>
-      <div class="progress-bar">
-        <div class="progress-fill" :style="{ width: `${job.progress}%` }"></div>
-      </div>
+      <ProgressBar
+        :progress="job.progress"
+        :stage="job.current_stage || progressText"
+        :status="job.status"
+      />
     </div>
 
     <!-- 完成 -->
