@@ -68,6 +68,16 @@ jobs:
       packages: write
 
     steps:
+      - name: Free disk space
+        run: |
+          # 釋放磁碟空間以容納大型 Docker 映像
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo docker system prune -af
+          df -h
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
