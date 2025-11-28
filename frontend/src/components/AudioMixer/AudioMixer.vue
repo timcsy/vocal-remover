@@ -33,7 +33,6 @@ const {
   error,
   isReady,
   pitchShift,
-  masterVolume,
   loadTracks,
   play,
   pause,
@@ -41,15 +40,12 @@ const {
   seek,
   setVolume,
   setPitchShift,
-  setMasterVolume,
 } = useWebAudio({ jobId: props.jobId });
 
 // Audio-Video sync composable
 // 影片作為主控制器，Web Audio 跟隨影片
 const {
-  syncEnabled,
   enableSync,
-  disableSync,
 } = useAudioSync({
   videoElement: videoRef as Ref<HTMLVideoElement | null>,
   isPlaying,
@@ -65,7 +61,6 @@ const trackNames: TrackName[] = ['drums', 'bass', 'other', 'vocals'];
 
 // Guide vocals (導唱) state
 const guideVocalsEnabled = ref(false);
-const savedVocalsVolume = ref(0); // Store previous volume when toggling off
 
 // Toggle guide vocals
 const toggleGuideVocals = () => {

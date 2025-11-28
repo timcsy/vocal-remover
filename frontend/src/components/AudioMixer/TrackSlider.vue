@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue';
+import { computed, ref } from 'vue';
 import { TRACK_LABELS, type TrackName, type TrackState } from '@/types/audio';
 
 const props = defineProps<{

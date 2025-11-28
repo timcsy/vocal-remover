@@ -16,9 +16,6 @@ const displayText = computed(() => {
   return `${sign}${props.value} 半音`;
 });
 
-// Fill percentage: map -12 to +12 => 0% to 100%
-const fillPercent = computed(() => ((props.value + 12) / 24) * 100);
-
 // Handle slider change
 const handleInput = (event: Event) => {
   const target = event.target as HTMLInputElement;

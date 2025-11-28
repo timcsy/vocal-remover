@@ -133,10 +133,6 @@ const progressText = computed(() => {
   return `${props.job.progress}%`;
 });
 
-const downloadUrl = computed(() => {
-  return api.getDownloadUrl(props.job.id);
-});
-
 const streamUrl = computed(() => {
   return api.getStreamUrl(props.job.id);
 });
@@ -156,17 +152,6 @@ const durationText = computed(() => {
   const secs = seconds % 60;
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 });
-
-// Fullscreen toggle
-const toggleFullscreen = () => {
-  if (videoElement.value) {
-    if (document.fullscreenElement) {
-      document.exitFullscreen();
-    } else {
-      videoElement.value.requestFullscreen();
-    }
-  }
-};
 </script>
 
 <template>
