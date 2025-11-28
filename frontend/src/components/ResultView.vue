@@ -82,6 +82,21 @@ const durationText = computed(() => {
     <div v-else-if="isCompleted" class="completed">
       <div class="status-icon success-icon">✓</div>
       <h2>處理完成</h2>
+
+      <!-- 影片預覽播放器 -->
+      <div class="video-preview">
+        <h3>伴奏影片預覽</h3>
+        <div class="video-container">
+          <video
+            :src="downloadUrl"
+            controls
+            preload="metadata"
+          >
+            您的瀏覽器不支援影片播放
+          </video>
+        </div>
+      </div>
+
       <div class="result-info" v-if="job.result">
         <p v-if="durationText">影片長度：{{ durationText }}</p>
         <p v-if="fileSizeText">檔案大小：{{ fileSizeText }}</p>
@@ -234,5 +249,33 @@ h2 {
 
 .retry-btn:hover {
   background: #3a7bc8;
+}
+
+.video-preview {
+  margin: 1.5rem 0;
+  text-align: left;
+}
+
+.video-preview h3 {
+  font-size: 1rem;
+  color: #666;
+  margin-bottom: 0.75rem;
+  text-align: center;
+}
+
+.video-container {
+  position: relative;
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  background: #000;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.video-container video {
+  width: 100%;
+  height: auto;
+  display: block;
 }
 </style>
