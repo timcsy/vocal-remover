@@ -1,4 +1,4 @@
-import { ref, reactive, computed, onUnmounted, watch, type Ref } from 'vue';
+import { ref, reactive, computed, onUnmounted, type Ref } from 'vue';
 import * as Tone from 'tone';
 import { DEFAULT_VOLUMES, type TrackName, type TrackState } from '@/types/audio';
 
@@ -103,12 +103,50 @@ export function useWebAudio(options: UseWebAudioOptions): UseWebAudioReturn {
     }
   };
 
+  // Cleanup function to properly dispose all audio resources
+  const cleanup = () => {
+    if (animationFrame) {
+      cancelAnimationFrame(animationFrame);
+      animationFrame = null;
+    }
+
+    const transport = Tone.getTransport();
+    transport.stop();
+    transport.cancel();
+    // 重置 Transport 時間，避免影響下一個歌曲
+    transport.seconds = 0;
+
+    // Dispose all Tone.js objects
+    Object.values(players).forEach(player => {
+      if (player) {
+        player.unsync(); // 從 Transport 解除同步
+        player.stop();
+        player.dispose();
+      }
+    });
+    Object.values(gainNodes).forEach(gain => gain?.dispose());
+    pitchShifter?.dispose();
+    masterGain?.dispose();
+
+    players = { drums: null, bass: null, other: null, vocals: null };
+    gainNodes = { drums: null, bass: null, other: null, vocals: null };
+    pitchShifter = null;
+    masterGain = null;
+
+    // 重置狀態
+    isPlaying.value = false;
+    currentTime.value = 0;
+  };
+
   // Load all tracks
   const loadTracks = async (): Promise<void> => {
     // Early return if browser doesn't support Web Audio
     if (!isWebAudioSupported()) {
       return;
     }
+
+    // 先清理之前的資源（如果有的話）
+    cleanup();
 
     isLoading.value = true;
     error.value = null;
@@ -275,24 +313,7 @@ export function useWebAudio(options: UseWebAudioOptions): UseWebAudioReturn {
 
   // Cleanup on unmount
   onUnmounted(() => {
-    if (animationFrame) {
-      cancelAnimationFrame(animationFrame);
-    }
-
-    const transport = Tone.getTransport();
-    transport.stop();
-    transport.cancel();
-
-    // Dispose all Tone.js objects
-    Object.values(players).forEach(player => player?.dispose());
-    Object.values(gainNodes).forEach(gain => gain?.dispose());
-    pitchShifter?.dispose();
-    masterGain?.dispose();
-
-    players = { drums: null, bass: null, other: null, vocals: null };
-    gainNodes = { drums: null, bass: null, other: null, vocals: null };
-    pitchShifter = null;
-    masterGain = null;
+    cleanup();
   });
 
   return {

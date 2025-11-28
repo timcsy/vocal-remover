@@ -85,6 +85,8 @@ cd frontend && npm run dev
 ## Active Technologies
 - Python 3.11 (後端), TypeScript 5.3 (前端) + FastAPI, Vue 3, Demucs, FFmpeg (rubberband), Tone.js (003-advanced-audio-mixer)
 - 本地檔案系統 (`/data/`) (003-advanced-audio-mixer)
+- Python 3.11 (Backend) + TypeScript 5.3 (Frontend) + FastAPI, Pydantic, Vue 3, Vite, Tone.js (004-video-mixer)
+- 本地檔案系統 + 記憶體狀態（無資料庫） (004-video-mixer)
 
 ## Recent Changes
 - 003-advanced-audio-mixer: Added Python 3.11 (後端), TypeScript 5.3 (前端) + FastAPI, Vue 3, Demucs, FFmpeg (rubberband), Tone.js

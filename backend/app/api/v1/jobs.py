@@ -15,6 +15,8 @@ from app.services.local_storage import get_local_storage
 from app.services.job_manager import get_job_manager
 from app.services.processor import process_job_async
 from app.services.mixer import get_mixer
+from app.services.exporter import get_exporter
+from app.services.importer import get_importer
 
 
 router = APIRouter()
@@ -57,6 +59,75 @@ class ErrorResponse(BaseModel):
     message: str
 
 
+# ========== Video Mixer API 新增 ==========
+
+class CompletedJobResponse(BaseModel):
+    """已完成任務回應"""
+    id: str
+    source_title: Optional[str]
+    source_type: SourceType
+    status: str
+    original_duration: Optional[int] = None
+    created_at: datetime
+
+
+class ProcessingJobResponse(BaseModel):
+    """處理中任務回應"""
+    id: str
+    source_title: Optional[str] = None
+    status: str
+    progress: int
+    current_stage: Optional[str] = None
+
+
+class JobsListResponse(BaseModel):
+    """任務列表回應"""
+    jobs: list[CompletedJobResponse]
+    processing: list[ProcessingJobResponse]
+
+
+class ExportRequest(BaseModel):
+    """匯出請求"""
+    job_ids: list[str]
+
+
+class ExportResponse(BaseModel):
+    """匯出回應"""
+    download_url: str
+
+
+class ImportConflict(BaseModel):
+    """匯入衝突"""
+    conflict_id: str
+    source_title: str
+    existing_job_id: str
+
+
+class ImportedJob(BaseModel):
+    """匯入的歌曲"""
+    id: str
+    source_title: Optional[str]
+
+
+class ImportResponse(BaseModel):
+    """匯入回應"""
+    imported: list[ImportedJob]
+    conflicts: list[ImportConflict]
+    errors: list[str]
+
+
+class ResolveConflictRequest(BaseModel):
+    """解決衝突請求"""
+    action: str  # 'overwrite' or 'rename'
+    new_title: Optional[str] = None
+
+
+class ResolveConflictResponse(BaseModel):
+    """解決衝突回應"""
+    job: Optional[ImportedJob] = None
+    error: Optional[str] = None
+
+
 def get_client_ip(request: Request) -> str:
     """取得客戶端 IP"""
     forwarded = request.headers.get("X-Forwarded-For")
@@ -72,6 +143,43 @@ def validate_file_extension(filename: str) -> bool:
     """驗證檔案副檔名"""
     ext = os.path.splitext(filename)[1].lower()
     return ext in ALLOWED_EXTENSIONS
+
+
+# ========== Video Mixer: 任務列表 API ==========
+
+@router.get("/jobs", response_model=JobsListResponse)
+async def get_jobs():
+    """
+    取得所有任務列表
+
+    返回已完成和處理中的任務列表，用於左側抽屜和任務佇列顯示
+    """
+    job_manager = get_job_manager()
+    completed, processing = job_manager.get_all_jobs()
+
+    return JobsListResponse(
+        jobs=[
+            CompletedJobResponse(
+                id=job.id,
+                source_title=job.source_title,
+                source_type=job.source_type,
+                status=job.status.value,
+                original_duration=job.original_duration,
+                created_at=job.created_at
+            )
+            for job in completed
+        ],
+        processing=[
+            ProcessingJobResponse(
+                id=job.id,
+                source_title=job.source_title,
+                status=job.status.value,
+                progress=job.progress,
+                current_stage=job.current_stage
+            )
+            for job in processing
+        ]
+    )
 
 
 @router.post("/jobs", response_model=JobResponse, status_code=201)
@@ -247,6 +355,32 @@ async def get_job(job_id: str):
     )
 
 
+@router.delete("/jobs/{job_id}", status_code=204)
+async def delete_job(job_id: str):
+    """
+    刪除任務
+
+    刪除指定任務及其相關檔案
+    """
+    job_manager = get_job_manager()
+    storage = get_local_storage()
+
+    job = job_manager.get_job(job_id)
+    if not job:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "JOB_NOT_FOUND", "message": "任務不存在"}
+        )
+
+    # 刪除相關檔案
+    storage.delete_job_files(job_id)
+
+    # 從記憶體中刪除任務
+    job_manager.delete_job(job_id)
+
+    return None
+
+
 @router.get("/jobs/{job_id}/download")
 async def download_result(job_id: str):
     """
@@ -269,7 +403,14 @@ async def download_result(job_id: str):
             detail={"code": "JOB_NOT_COMPLETED", "message": "任務尚未完成"}
         )
 
-    if not job.result_key or not os.path.exists(job.result_key):
+    # 優先使用原始影片（含人聲），否則使用 result_key
+    file_path = None
+    if job.original_video_path and os.path.exists(job.original_video_path):
+        file_path = job.original_video_path
+    elif job.result_key and os.path.exists(job.result_key):
+        file_path = job.result_key
+
+    if not file_path:
         raise HTTPException(
             status_code=400,
             detail={"code": "NO_RESULT", "message": "找不到結果檔案"}
@@ -280,15 +421,15 @@ async def download_result(job_id: str):
         # 清理檔名中的特殊字元
         safe_title = re.sub(r'[<>:"/\\|?*]', '_', job.source_title)
         safe_title = safe_title.strip()[:100]  # 限制長度
-        filename = f"{safe_title}_伴奏.mp4"
+        filename = f"{safe_title}.mp4"
     else:
-        filename = f"karaoke_{job_id}.mp4"
+        filename = f"video_{job_id}.mp4"
 
     # 使用 RFC 5987 編碼處理非 ASCII 字元
     filename_encoded = quote(filename, safe='')
 
     return FileResponse(
-        path=job.result_key,
+        path=file_path,
         media_type="video/mp4",
         filename=filename,
         headers={
@@ -319,13 +460,18 @@ async def stream_result(job_id: str, range: Optional[str] = Header(None)):
             detail={"code": "JOB_NOT_COMPLETED", "message": "任務尚未完成"}
         )
 
-    if not job.result_key or not os.path.exists(job.result_key):
+    # 優先使用原始影片（含人聲），否則使用 result_key
+    file_path = None
+    if job.original_video_path and os.path.exists(job.original_video_path):
+        file_path = job.original_video_path
+    elif job.result_key and os.path.exists(job.result_key):
+        file_path = job.result_key
+
+    if not file_path:
         raise HTTPException(
             status_code=400,
             detail={"code": "NO_RESULT", "message": "找不到結果檔案"}
         )
-
-    file_path = job.result_key
     file_size = os.path.getsize(file_path)
 
     # 解析 Range header
@@ -800,4 +946,168 @@ async def download_mix(job_id: str, mix_id: str):
         headers={
             "Content-Disposition": f"attachment; filename*=UTF-8''{filename_encoded}"
         }
+    )
+
+
+# ========== Video Mixer: 匯出 API ==========
+
+@router.post("/jobs/export", response_model=ExportResponse)
+async def export_jobs(body: ExportRequest):
+    """
+    匯出歌曲
+
+    將選定的歌曲打包為 ZIP 檔案下載
+    """
+    if not body.job_ids:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "NO_JOBS_SELECTED", "message": "請選擇要匯出的歌曲"}
+        )
+
+    job_manager = get_job_manager()
+    exporter = get_exporter()
+
+    # 取得所有選取的任務
+    jobs = []
+    for job_id in body.job_ids:
+        job = job_manager.get_job(job_id)
+        if not job:
+            raise HTTPException(
+                status_code=404,
+                detail={"code": "JOB_NOT_FOUND", "message": f"任務 {job_id} 不存在"}
+            )
+        if job.status != JobStatus.COMPLETED:
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "JOB_NOT_COMPLETED", "message": f"任務 {job_id} 尚未完成"}
+            )
+        jobs.append(job)
+
+    # 建立 ZIP
+    if len(jobs) == 1:
+        zip_path = exporter.create_single_zip(jobs[0])
+    else:
+        zip_path = exporter.create_multi_zip(jobs)
+
+    if not zip_path:
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "EXPORT_FAILED", "message": "匯出失敗"}
+        )
+
+    # 從路徑取得 export_id
+    from pathlib import Path
+    export_id = Path(zip_path).parent.name
+
+    return ExportResponse(
+        download_url=f"/api/v1/jobs/export/download/{export_id}"
+    )
+
+
+@router.get("/jobs/export/download/{export_id}")
+async def download_export(export_id: str):
+    """
+    下載匯出的 ZIP
+
+    下載已打包完成的 ZIP 檔案
+    """
+    exporter = get_exporter()
+    zip_path = exporter.get_export_path(export_id)
+
+    if not zip_path or not os.path.exists(zip_path):
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "EXPORT_NOT_FOUND", "message": "匯出檔案不存在"}
+        )
+
+    filename = os.path.basename(zip_path)
+    filename_encoded = quote(filename, safe='')
+
+    return FileResponse(
+        path=zip_path,
+        media_type="application/zip",
+        filename=filename,
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{filename_encoded}"
+        }
+    )
+
+
+# ========== Video Mixer: 匯入 API ==========
+
+@router.post("/jobs/import", response_model=ImportResponse)
+async def import_jobs(file: UploadFile = File(...)):
+    """
+    匯入歌曲
+
+    從 ZIP 檔案匯入歌曲
+    """
+    if not file.filename or not file.filename.endswith('.zip'):
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "INVALID_FILE", "message": "請選擇 ZIP 檔案"}
+        )
+
+    importer = get_importer()
+    storage = get_local_storage()
+
+    # 儲存上傳的 ZIP 檔案到暫存目錄
+    content = await file.read()
+    import tempfile
+    with tempfile.NamedTemporaryFile(suffix='.zip', delete=False) as tmp:
+        tmp.write(content)
+        tmp_path = tmp.name
+
+    try:
+        # 執行匯入
+        result = importer.import_zip(tmp_path)
+
+        return ImportResponse(
+            imported=[
+                ImportedJob(id=job.id, source_title=job.source_title)
+                for job in result.imported
+            ],
+            conflicts=[
+                ImportConflict(
+                    conflict_id=c['conflict_id'],
+                    source_title=c['source_title'],
+                    existing_job_id=c['existing_job_id']
+                )
+                for c in result.conflicts
+            ],
+            errors=result.errors
+        )
+    finally:
+        # 清理暫存檔案
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+
+
+@router.post("/jobs/import/resolve/{conflict_id}", response_model=ResolveConflictResponse)
+async def resolve_import_conflict(conflict_id: str, body: ResolveConflictRequest):
+    """
+    解決匯入衝突
+
+    當匯入的歌曲與現有歌曲同名時，選擇覆蓋或重新命名
+    """
+    if body.action not in ('overwrite', 'rename'):
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "INVALID_ACTION", "message": "操作必須是 'overwrite' 或 'rename'"}
+        )
+
+    if body.action == 'rename' and not body.new_title:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "MISSING_TITLE", "message": "重新命名需要提供新名稱"}
+        )
+
+    importer = get_importer()
+    job, error = importer.resolve_conflict(conflict_id, body.action, body.new_title)
+
+    if error:
+        return ResolveConflictResponse(error=error)
+
+    return ResolveConflictResponse(
+        job=ImportedJob(id=job.id, source_title=job.source_title) if job else None
     )

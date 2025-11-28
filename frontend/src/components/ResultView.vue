@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue';
+import { ref, computed } from 'vue';
 import { api, type JobWithResult, type MixRequest, type OutputFormat } from '../services/api';
 import ProgressBar from './ProgressBar.vue';
 import AudioMixer from './AudioMixer/AudioMixer.vue';
@@ -62,7 +62,7 @@ const startDownload = async () => {
       bass_volume: mixer.tracks?.bass?.volume ?? 1,
       other_volume: mixer.tracks?.other?.volume ?? 1,
       vocals_volume: mixer.tracks?.vocals?.volume ?? 0,
-      pitch_shift: mixer.pitchShift?.value ?? 0,
+      pitch_shift: mixer.pitchShift ?? 0,
       output_format: selectedFormat.value,
     };
 

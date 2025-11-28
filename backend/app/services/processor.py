@@ -119,6 +119,11 @@ def _process_youtube_job(job: Job):
                 sample_rate=separation_result.get("sample_rate")
             )
 
+        # === 階段 3.6: 複製原始影片到結果目錄 ===
+        original_video_dst = storage.get_result_path(job.id, "original.mp4")
+        shutil.copy2(video_path, str(original_video_dst))
+        job_manager.update_job(job.id, original_video_path=str(original_video_dst))
+
         # === 階段 4: 合併影片 ===
         job_manager.update_progress(job.id, 70, "合併影片中...", JobStatus.MERGING)
 
@@ -207,6 +212,11 @@ def _process_upload_job(job: Job):
                 track_paths=TrackPaths(**track_paths),
                 sample_rate=separation_result.get("sample_rate")
             )
+
+        # === 階段 3.6: 複製原始影片到結果目錄 ===
+        original_video_dst = storage.get_result_path(job.id, "original.mp4")
+        shutil.copy2(video_path, str(original_video_dst))
+        job_manager.update_job(job.id, original_video_path=str(original_video_dst))
 
         # === 階段 4: 合併影片 ===
         job_manager.update_progress(job.id, 70, "合併影片中...", JobStatus.MERGING)

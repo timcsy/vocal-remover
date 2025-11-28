@@ -71,6 +71,7 @@ class Job(BaseModel):
     # 進階音軌控制功能
     track_paths: Optional[TrackPaths] = None
     sample_rate: Optional[int] = None
+    original_video_path: Optional[str] = None  # 原始影片路徑（含人聲）
 
     def update_status(self, status: JobStatus, progress: int = None, stage: str = None):
         """更新任務狀態"""

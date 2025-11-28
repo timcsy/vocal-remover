@@ -1,6 +1,6 @@
 import threading
 from datetime import datetime
-from typing import Dict, Optional, Callable
+from typing import Dict, List, Optional, Tuple, Callable
 
 from app.core.config import get_settings
 from app.models.job import Job, JobStatus
@@ -98,6 +98,38 @@ class JobManager:
         """取得處理中任務數量"""
         with self._lock:
             return self._processing_count
+
+    def get_all_jobs(self) -> Tuple[List[Job], List[Job]]:
+        """取得所有任務列表
+
+        Returns:
+            Tuple[List[Job], List[Job]]: (已完成任務列表, 處理中任務列表)
+        """
+        with self._lock:
+            completed = []
+            processing = []
+            for job in self._jobs.values():
+                if job.status == JobStatus.COMPLETED:
+                    completed.append(job)
+                elif job.status not in (JobStatus.FAILED,):
+                    processing.append(job)
+            # 按建立時間排序（新的在前）
+            completed.sort(key=lambda j: j.created_at, reverse=True)
+            processing.sort(key=lambda j: j.created_at, reverse=True)
+            return completed, processing
+
+    def find_job_by_title(self, title: str) -> Optional[Job]:
+        """根據標題查找任務"""
+        with self._lock:
+            for job in self._jobs.values():
+                if job.source_title == title:
+                    return job
+            return None
+
+    def add_imported_job(self, job: Job):
+        """加入匯入的任務"""
+        with self._lock:
+            self._jobs[job.id] = job
 
 
 # Global instance

@@ -1,0 +1,352 @@
+openapi: 3.0.3
+info:
+  title: Video Mixer API
+  description: 影片混音器 API - 擴展現有人聲去除服務
+  version: 1.0.0
+
+servers:
+  - url: /api/v1
+    description: API v1
+
+paths:
+  /jobs:
+    get:
+      summary: 取得所有任務列表
+      description: 返回已完成和處理中的任務列表，用於左側抽屜和任務佇列顯示
+      operationId: getJobs
+      tags:
+        - Jobs
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobsListResponse'
+
+  /jobs/{job_id}:
+    delete:
+      summary: 刪除任務
+      description: 刪除指定任務及其相關檔案
+      operationId: deleteJob
+      tags:
+        - Jobs
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: 刪除成功
+        '404':
+          description: 任務不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /jobs/export:
+    post:
+      summary: 匯出歌曲
+      description: 將選定的歌曲打包為 ZIP 檔案下載
+      operationId: exportJobs
+      tags:
+        - Export/Import
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExportRequest'
+      responses:
+        '200':
+          description: 匯出成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportResponse'
+        '400':
+          description: 請求無效（未選擇歌曲或歌曲狀態不正確）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /jobs/export/download/{export_id}:
+    get:
+      summary: 下載匯出的 ZIP
+      description: 下載已打包完成的 ZIP 檔案
+      operationId: downloadExport
+      tags:
+        - Export/Import
+      parameters:
+        - name: export_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ZIP 檔案串流
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: 匯出檔案不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /jobs/import:
+    post:
+      summary: 匯入歌曲
+      description: 上傳 ZIP 檔案還原歌曲
+      operationId: importJobs
+      tags:
+        - Export/Import
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: ZIP 檔案
+              required:
+                - file
+      responses:
+        '200':
+          description: 匯入成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportResponse'
+        '400':
+          description: 匯入失敗（檔案格式不正確或超過限制）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /jobs/import/resolve:
+    post:
+      summary: 解決匯入衝突
+      description: 處理匯入時的名稱衝突
+      operationId: resolveImportConflict
+      tags:
+        - Export/Import
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResolveConflictRequest'
+      responses:
+        '200':
+          description: 衝突解決成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportedJob'
+        '400':
+          description: 解決失敗
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    JobsListResponse:
+      type: object
+      properties:
+        jobs:
+          type: array
+          description: 已完成的任務列表
+          items:
+            $ref: '#/components/schemas/CompletedJob'
+        processing:
+          type: array
+          description: 處理中的任務列表
+          items:
+            $ref: '#/components/schemas/ProcessingJob'
+      required:
+        - jobs
+        - processing
+
+    CompletedJob:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        source_title:
+          type: string
+        source_type:
+          type: string
+          enum: [youtube, upload]
+        status:
+          type: string
+          enum: [completed]
+        original_duration:
+          type: integer
+          description: 時長（秒）
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - source_title
+        - source_type
+        - status
+        - created_at
+
+    ProcessingJob:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        source_title:
+          type: string
+        status:
+          type: string
+          enum: [pending, downloading, separating, merging, mixing]
+        progress:
+          type: integer
+          minimum: 0
+          maximum: 100
+        current_stage:
+          type: string
+      required:
+        - id
+        - status
+        - progress
+
+    ExportRequest:
+      type: object
+      properties:
+        job_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          minItems: 1
+          description: 要匯出的任務 ID 列表
+      required:
+        - job_ids
+
+    ExportResponse:
+      type: object
+      properties:
+        download_url:
+          type: string
+          description: ZIP 下載網址
+      required:
+        - download_url
+
+    ImportResponse:
+      type: object
+      properties:
+        imported:
+          type: array
+          description: 成功匯入的歌曲
+          items:
+            $ref: '#/components/schemas/ImportedJob'
+        conflicts:
+          type: array
+          description: 需要解決衝突的歌曲
+          items:
+            $ref: '#/components/schemas/ImportConflict'
+        errors:
+          type: array
+          description: 匯入失敗的項目
+          items:
+            $ref: '#/components/schemas/ImportError'
+      required:
+        - imported
+        - conflicts
+        - errors
+
+    ImportedJob:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        source_title:
+          type: string
+      required:
+        - id
+        - source_title
+
+    ImportConflict:
+      type: object
+      properties:
+        temp_id:
+          type: string
+          description: 暫存 ID，用於解決衝突
+        existing_job_id:
+          type: string
+          format: uuid
+          description: 現有同名歌曲的 ID
+        import_title:
+          type: string
+          description: 要匯入的歌曲標題
+      required:
+        - temp_id
+        - existing_job_id
+        - import_title
+
+    ImportError:
+      type: object
+      properties:
+        filename:
+          type: string
+        error:
+          type: string
+      required:
+        - filename
+        - error
+
+    ResolveConflictRequest:
+      type: object
+      properties:
+        temp_id:
+          type: string
+          description: 衝突的暫存 ID
+        resolution:
+          type: string
+          enum: [overwrite, rename]
+          description: 解決方式
+      required:
+        - temp_id
+        - resolution
+
+    ErrorResponse:
+      type: object
+      properties:
+        code:
+          type: string
+          description: 錯誤代碼
+        message:
+          type: string
+          description: 錯誤訊息
+      required:
+        - code
+        - message
+
+tags:
+  - name: Jobs
+    description: 任務管理
+  - name: Export/Import
+    description: 匯出/匯入功能

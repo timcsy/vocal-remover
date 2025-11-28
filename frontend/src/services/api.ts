@@ -54,6 +54,60 @@ export interface MixStatusResponse {
   error_message: string | null;
 }
 
+// ========== Video Mixer Types ==========
+
+export interface CompletedJob {
+  id: string;
+  source_title: string | null;
+  source_type: 'youtube' | 'upload';
+  status: 'completed';
+  original_duration: number | null;
+  created_at: string;
+}
+
+export interface ProcessingJob {
+  id: string;
+  source_title: string | null;
+  status: 'pending' | 'downloading' | 'separating' | 'merging' | 'mixing';
+  progress: number;
+  current_stage: string | null;
+}
+
+export interface JobsListResponse {
+  jobs: CompletedJob[];
+  processing: ProcessingJob[];
+}
+
+export interface ExportRequest {
+  job_ids: string[];
+}
+
+export interface ExportResponse {
+  download_url: string;
+}
+
+export interface ImportConflict {
+  conflict_id: string;
+  source_title: string;
+  existing_job_id: string;
+}
+
+export interface ImportedJob {
+  id: string;
+  source_title: string | null;
+}
+
+export interface ImportResponse {
+  imported: ImportedJob[];
+  conflicts: ImportConflict[];
+  errors: string[];
+}
+
+export interface ResolveConflictResponse {
+  job: ImportedJob | null;
+  error: string | null;
+}
+
 class ApiService {
   private async request<T>(
     endpoint: string,
@@ -131,6 +185,62 @@ class ApiService {
 
   getMixDownloadUrl(jobId: string, mixId: string): string {
     return `${API_BASE}/jobs/${jobId}/mix/${mixId}/download`;
+  }
+
+  // ========== Video Mixer API ==========
+
+  async getJobs(): Promise<JobsListResponse> {
+    return this.request<JobsListResponse>('/jobs');
+  }
+
+  async deleteJob(jobId: string): Promise<void> {
+    const response = await fetch(`${API_BASE}/jobs/${jobId}`, {
+      method: 'DELETE',
+    });
+
+    if (!response.ok) {
+      const error: ApiError = await response.json();
+      throw error;
+    }
+  }
+
+  async exportJobs(jobIds: string[]): Promise<ExportResponse> {
+    return this.request<ExportResponse>('/jobs/export', {
+      method: 'POST',
+      body: JSON.stringify({ job_ids: jobIds }),
+    });
+  }
+
+  getExportDownloadUrl(exportId: string): string {
+    return `${API_BASE}/jobs/export/download/${exportId}`;
+  }
+
+  async importJobs(file: File): Promise<ImportResponse> {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await fetch(`${API_BASE}/jobs/import`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error: ApiError = await response.json();
+      throw error;
+    }
+
+    return response.json();
+  }
+
+  async resolveImportConflict(
+    conflictId: string,
+    action: 'overwrite' | 'rename',
+    newTitle?: string
+  ): Promise<ResolveConflictResponse> {
+    return this.request<ResolveConflictResponse>(`/jobs/import/resolve/${conflictId}`, {
+      method: 'POST',
+      body: JSON.stringify({ action, new_title: newTitle }),
+    });
   }
 }
 

@@ -1,112 +1,230 @@
 <script setup lang="ts">
-import { ref, onUnmounted } from 'vue';
-import { api, type Job, type JobWithResult } from './services/api';
-import UrlInput from './components/UrlInput.vue';
-import FileUpload from './components/FileUpload.vue';
-import ResultView from './components/ResultView.vue';
+import { ref, computed } from 'vue';
+import { useJobManager } from './composables/useJobManager';
+import { api, type ImportConflict, type ProcessingJob } from './services/api';
+import AppDrawer from './components/AppDrawer.vue';
+import MainView from './components/MainView.vue';
+import AddSongModal from './components/AddSongModal.vue';
+import TaskQueue from './components/TaskQueue.vue';
+import TaskDetailModal from './components/TaskDetailModal.vue';
+import ImportConflictModal from './components/ImportConflictModal.vue';
 
-// 應用程式狀態
-const currentJob = ref<JobWithResult | null>(null);
-const error = ref<string | null>(null);
-let pollInterval: number | null = null;
+// 全域狀態管理
+const {
+  completedJobs,
+  processingJobs,
+  selectedJobId,
+  drawerOpen,
+  selectedJobIds,
+  selectedJob,
+  hasProcessingJobs,
+  selectJob,
+  toggleDrawer,
+  setDrawerOpen,
+  toggleJobSelection,
+  selectAllJobs,
+  deselectAllJobs,
+  deleteJob,
+  refreshJobs,
+} = useJobManager();
 
-// 處理任務建立
-function handleJobCreated(job: Job) {
-  currentJob.value = { ...job, result: null };
-  error.value = null;
-  startPolling();
+// 模態視窗狀態
+const showAddSongModal = ref(false);
+const selectedTaskId = ref<string | null>(null);
+
+// 匯入衝突狀態
+const importConflicts = ref<ImportConflict[]>([]);
+const currentConflict = ref<ImportConflict | null>(null);
+
+// 處理新增歌曲
+function handleAddSong() {
+  showAddSongModal.value = true;
 }
 
-// 處理錯誤
-function handleError(message: string) {
-  error.value = message;
+function handleCloseAddSongModal() {
+  showAddSongModal.value = false;
 }
 
-// 重置狀態
-function reset() {
-  stopPolling();
-  currentJob.value = null;
-  error.value = null;
+function handleJobCreated() {
+  showAddSongModal.value = false;
+  refreshJobs();
 }
 
-// 開始輪詢任務狀態
-function startPolling() {
-  if (pollInterval) return;
-
-  pollInterval = window.setInterval(async () => {
-    if (!currentJob.value) {
-      stopPolling();
-      return;
-    }
-
-    try {
-      const job = await api.getJob(currentJob.value.id);
-      currentJob.value = job;
-
-      // 如果任務完成或失敗，停止輪詢
-      if (job.status === 'completed' || job.status === 'failed') {
-        stopPolling();
-      }
-    } catch (e) {
-      // 忽略輪詢錯誤
-    }
-  }, 1000); // 每秒更新一次進度
-}
-
-// 停止輪詢
-function stopPolling() {
-  if (pollInterval) {
-    clearInterval(pollInterval);
-    pollInterval = null;
+// 處理刪除歌曲
+async function handleDeleteJob(jobId: string) {
+  if (confirm('確定要刪除這首歌曲嗎？')) {
+    await deleteJob(jobId);
   }
 }
 
-// 清理
-onUnmounted(() => {
-  stopPolling();
+// 處理匯出
+async function handleExport() {
+  const jobIds = Array.from(selectedJobIds.value);
+  if (jobIds.length === 0) {
+    return;
+  }
+
+  try {
+    const response = await api.exportJobs(jobIds);
+    // 開啟下載連結
+    window.open(response.download_url, '_blank');
+  } catch (error) {
+    console.error('Export failed:', error);
+    alert('匯出失敗，請稍後再試');
+  }
+}
+
+// 處理匯入
+async function handleImport() {
+  // 開啟檔案選擇器
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.zip';
+
+  input.onchange = async (e) => {
+    const file = (e.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+
+    try {
+      const response = await api.importJobs(file);
+
+      // 顯示匯入結果
+      if (response.imported.length > 0) {
+        refreshJobs();
+      }
+
+      if (response.errors.length > 0) {
+        alert('部分匯入失敗:\n' + response.errors.join('\n'));
+      }
+
+      // 處理衝突
+      if (response.conflicts.length > 0) {
+        importConflicts.value = response.conflicts;
+        currentConflict.value = importConflicts.value[0];
+      }
+    } catch (error) {
+      console.error('Import failed:', error);
+      alert('匯入失敗，請確認檔案格式正確');
+    }
+  };
+
+  input.click();
+}
+
+// 處理衝突解決
+async function handleResolveConflict(action: string, newTitle?: string) {
+  if (!currentConflict.value) return;
+
+  try {
+    const response = await api.resolveImportConflict(
+      currentConflict.value.conflict_id,
+      action as 'overwrite' | 'rename',
+      newTitle
+    );
+
+    if (response.error) {
+      alert(response.error);
+      return;
+    }
+
+    // 移除已解決的衝突
+    importConflicts.value = importConflicts.value.filter(
+      c => c.conflict_id !== currentConflict.value?.conflict_id
+    );
+
+    // 處理下一個衝突或關閉
+    if (importConflicts.value.length > 0) {
+      currentConflict.value = importConflicts.value[0];
+    } else {
+      currentConflict.value = null;
+    }
+
+    // 重新整理列表
+    refreshJobs();
+  } catch (error) {
+    console.error('Resolve conflict failed:', error);
+    alert('解決衝突失敗，請稍後再試');
+  }
+}
+
+// 關閉衝突模態視窗
+function handleCloseConflictModal() {
+  // 取消所有剩餘衝突
+  currentConflict.value = null;
+  importConflicts.value = [];
+}
+
+// 任務詳情
+const selectedTask = computed<ProcessingJob | null>(() => {
+  if (!selectedTaskId.value) return null;
+  return processingJobs.value.find(job => job.id === selectedTaskId.value) || null;
 });
+
+function handleTaskClick(jobId: string) {
+  selectedTaskId.value = jobId;
+}
+
+function handleCloseTaskDetail() {
+  selectedTaskId.value = null;
+}
 </script>
 
 <template>
-  <div class="app" :class="{ 'full-screen': currentJob?.status === 'completed' }">
-    <!-- 標題區 - 只在沒有任務或處理中時顯示 -->
-    <header v-if="!currentJob || currentJob.status !== 'completed'" class="header">
-      <h1>人聲去除服務</h1>
-      <p>上傳影片或貼上 YouTube 網址，自動去除人聲產生伴奏</p>
-    </header>
+  <div class="app">
+    <!-- 左側抽屜 -->
+    <AppDrawer
+      :isOpen="drawerOpen"
+      :jobs="completedJobs"
+      :selectedJobId="selectedJobId"
+      :selectedJobIds="selectedJobIds"
+      @close="setDrawerOpen(false)"
+      @select="selectJob"
+      @toggle="toggleJobSelection"
+      @delete="handleDeleteJob"
+      @selectAll="selectAllJobs"
+      @deselectAll="deselectAllJobs"
+      @addSong="handleAddSong"
+      @export="handleExport"
+      @import="handleImport"
+    />
 
-    <main class="main">
-      <!-- 錯誤訊息 -->
-      <div v-if="error" class="error-message">
-        {{ error }}
-        <button @click="error = null">關閉</button>
-      </div>
+    <!-- 主內容區 -->
+    <MainView
+      :selectedJob="selectedJob"
+      :drawerOpen="drawerOpen"
+      @toggleDrawer="toggleDrawer"
+      @addSong="handleAddSong"
+    />
 
-      <!-- 輸入區域 - 當沒有進行中的任務時顯示 -->
-      <div v-if="!currentJob" class="input-section">
-        <UrlInput
-          @job-created="handleJobCreated"
-          @error="handleError"
-        />
-        <FileUpload
-          @job-created="handleJobCreated"
-          @error="handleError"
-        />
-      </div>
+    <!-- 底部任務佇列 -->
+    <TaskQueue
+      v-if="hasProcessingJobs"
+      :jobs="processingJobs"
+      :drawerOpen="drawerOpen"
+      @taskClick="handleTaskClick"
+    />
 
-      <!-- 進度和結果區域 - 當有任務時顯示 -->
-      <div v-else class="result-section">
-        <ResultView
-          :job="currentJob"
-          @reset="reset"
-        />
-      </div>
-    </main>
+    <!-- 新增歌曲模態視窗 -->
+    <AddSongModal
+      v-if="showAddSongModal"
+      @close="handleCloseAddSongModal"
+      @created="handleJobCreated"
+    />
 
-    <!-- Footer - 只在沒有任務或處理中時顯示 -->
-    <footer v-if="!currentJob || currentJob.status !== 'completed'" class="footer">
-      <p>結果保留 24 小時，每小時最多 12 次請求</p>
-    </footer>
+    <!-- 匯入衝突模態視窗 -->
+    <ImportConflictModal
+      v-if="currentConflict"
+      :conflict="currentConflict"
+      @close="handleCloseConflictModal"
+      @resolve="handleResolveConflict"
+    />
+
+    <!-- 任務詳情模態視窗 -->
+    <TaskDetailModal
+      v-if="selectedTask"
+      :job="selectedTask"
+      @close="handleCloseTaskDetail"
+    />
   </div>
 </template>
 
@@ -119,88 +237,12 @@ onUnmounted(() => {
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background: #f5f5f5;
+  background: #121212;
+  color: #e0e0e0;
   min-height: 100vh;
 }
 
 .app {
-  max-width: 800px;
-  margin: 0 auto;
-  padding: 2rem;
-}
-
-.app.full-screen {
-  max-width: 100%;
-  padding: 1rem;
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
-}
-
-.app.full-screen .main {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-
-.header {
-  text-align: center;
-  margin-bottom: 2rem;
-}
-
-.header h1 {
-  font-size: 2rem;
-  color: #333;
-  margin-bottom: 0.5rem;
-}
-
-.header p {
-  color: #666;
-}
-
-.main {
-  background: white;
-  border-radius: 8px;
-  padding: 2rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.error-message {
-  background: #fee;
-  border: 1px solid #fcc;
-  color: #c00;
-  padding: 1rem;
-  border-radius: 4px;
-  margin-bottom: 1rem;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.error-message button {
-  background: none;
-  border: none;
-  color: #c00;
-  cursor: pointer;
-  font-size: 1rem;
-}
-
-.input-section {
-  min-height: 200px;
-}
-
-.result-section {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-
-.footer {
-  text-align: center;
-  margin-top: 2rem;
-  color: #999;
-  font-size: 0.875rem;
+  min-height: 100vh;
 }
 </style>
