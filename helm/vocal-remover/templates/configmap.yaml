@@ -11,10 +11,10 @@ data:
   MINIO_ENDPOINT: {{ include "vocal-remover.minioEndpoint" . | quote }}
   MINIO_BUCKET: "vocal-remover"
   MINIO_SECURE: "false"
-  MAX_UPLOAD_SIZE: {{ .Values.processing.maxUploadSize | quote }}
-  MAX_VIDEO_DURATION: {{ .Values.processing.maxVideoDuration | quote }}
-  RATE_LIMIT_REQUESTS: {{ .Values.processing.rateLimitRequests | quote }}
-  RATE_LIMIT_WINDOW: {{ .Values.processing.rateLimitWindow | quote }}
-  RESULT_EXPIRY_HOURS: {{ .Values.processing.resultExpiryHours | quote }}
-  JOB_TIMEOUT_MINUTES: {{ .Values.processing.jobTimeoutMinutes | quote }}
+  MAX_UPLOAD_SIZE: {{ printf "%.0f" .Values.processing.maxUploadSize | quote }}
+  MAX_VIDEO_DURATION: {{ printf "%.0f" .Values.processing.maxVideoDuration | quote }}
+  RATE_LIMIT_REQUESTS: {{ printf "%.0f" .Values.processing.rateLimitRequests | quote }}
+  RATE_LIMIT_WINDOW: {{ printf "%.0f" .Values.processing.rateLimitWindow | quote }}
+  RESULT_EXPIRY_HOURS: {{ printf "%.0f" .Values.processing.resultExpiryHours | quote }}
+  JOB_TIMEOUT_MINUTES: {{ printf "%.0f" .Values.processing.jobTimeoutMinutes | quote }}
   DEVICE: {{ .Values.processing.device | quote }}
