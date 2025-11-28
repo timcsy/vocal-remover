@@ -1,0 +1,301 @@
+openapi: 3.0.3
+info:
+  title: 進階音軌控制 API
+  description: 音軌串流、混音產生與下載 API
+  version: 1.0.0
+
+servers:
+  - url: /api/v1
+    description: API v1
+
+paths:
+  /jobs/{job_id}/tracks:
+    get:
+      summary: 取得可用音軌列表
+      description: 返回已分離的音軌資訊
+      operationId: getTracks
+      tags:
+        - Tracks
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TracksInfo'
+        '404':
+          description: 任務不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /jobs/{job_id}/tracks/{track_name}:
+    get:
+      summary: 串流單一音軌
+      description: 返回音軌音頻檔案，支援 HTTP Range
+      operationId: streamTrack
+      tags:
+        - Tracks
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: track_name
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [drums, bass, other, vocals]
+        - name: Range
+          in: header
+          required: false
+          schema:
+            type: string
+          description: HTTP Range header for partial content
+      responses:
+        '200':
+          description: 完整音軌
+          content:
+            audio/wav:
+              schema:
+                type: string
+                format: binary
+        '206':
+          description: 部分內容（Range request）
+          headers:
+            Content-Range:
+              schema:
+                type: string
+              description: "bytes 0-1023/2048"
+          content:
+            audio/wav:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: 音軌不存在
+
+  /jobs/{job_id}/mix:
+    post:
+      summary: 產生自訂混音
+      description: 根據設定產生混音檔案，支援快取
+      operationId: createMix
+      tags:
+        - Mix
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MixSettings'
+      responses:
+        '200':
+          description: 混音任務已建立或來自快取
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MixResponse'
+        '400':
+          description: 參數錯誤
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: 任務不存在
+
+  /jobs/{job_id}/mix/{mix_id}:
+    get:
+      summary: 查詢混音任務狀態
+      description: 取得混音產生進度
+      operationId: getMixStatus
+      tags:
+        - Mix
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: mix_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MixResponse'
+        '404':
+          description: 混音任務不存在
+
+  /jobs/{job_id}/mix/{mix_id}/download:
+    get:
+      summary: 下載混音檔案
+      description: 下載已完成的混音檔案
+      operationId: downloadMix
+      tags:
+        - Mix
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: mix_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 混音檔案
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+              description: 'attachment; filename="mix.mp4"'
+          content:
+            video/mp4:
+              schema:
+                type: string
+                format: binary
+            audio/mpeg:
+              schema:
+                type: string
+                format: binary
+            audio/mp4:
+              schema:
+                type: string
+                format: binary
+            audio/wav:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: 混音檔案不存在
+        '425':
+          description: 混音尚未完成
+
+components:
+  schemas:
+    TracksInfo:
+      type: object
+      properties:
+        tracks:
+          type: array
+          items:
+            type: string
+            enum: [drums, bass, other, vocals]
+          example: [drums, bass, other, vocals]
+        sample_rate:
+          type: integer
+          example: 44100
+        duration:
+          type: number
+          format: float
+          description: 音頻長度（秒）
+          example: 180.5
+      required:
+        - tracks
+        - sample_rate
+        - duration
+
+    MixSettings:
+      type: object
+      properties:
+        drums_volume:
+          type: number
+          minimum: 0.0
+          maximum: 2.0
+          default: 1.0
+          description: 鼓聲音量 (0-200%)
+        bass_volume:
+          type: number
+          minimum: 0.0
+          maximum: 2.0
+          default: 1.0
+          description: 貝斯音量
+        other_volume:
+          type: number
+          minimum: 0.0
+          maximum: 2.0
+          default: 1.0
+          description: 其他樂器音量
+        vocals_volume:
+          type: number
+          minimum: 0.0
+          maximum: 2.0
+          default: 0.0
+          description: 人聲音量（預設關閉）
+        pitch_shift:
+          type: integer
+          minimum: -12
+          maximum: 12
+          default: 0
+          description: 升降 Key（半音數）
+        output_format:
+          type: string
+          enum: [mp4, mp3, m4a, wav]
+          default: mp4
+          description: 輸出格式
+
+    MixResponse:
+      type: object
+      properties:
+        mix_id:
+          type: string
+          description: 混音任務 ID
+        status:
+          type: string
+          enum: [processing, completed, failed]
+          description: 任務狀態
+        download_url:
+          type: string
+          nullable: true
+          description: 下載 URL（完成後填入）
+          example: /api/v1/jobs/abc123/mix/def456/download
+        cached:
+          type: boolean
+          default: false
+          description: 是否來自快取
+        progress:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: 處理進度
+      required:
+        - mix_id
+        - status
+
+    Error:
+      type: object
+      properties:
+        detail:
+          type: string
+          description: 錯誤訊息
+      required:
+        - detail

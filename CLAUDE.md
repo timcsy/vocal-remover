@@ -81,3 +81,10 @@ cd frontend && npm run dev
 - `GET /api/v1/jobs/{id}` - 查詢任務狀態
 - `GET /api/v1/jobs/{id}/download` - 下載結果
 - `GET /api/v1/jobs/{id}/stream` - 串流播放
+
+## Active Technologies
+- Python 3.11 (後端), TypeScript 5.3 (前端) + FastAPI, Vue 3, Demucs, FFmpeg (rubberband), Tone.js (003-advanced-audio-mixer)
+- 本地檔案系統 (`/data/`) (003-advanced-audio-mixer)
+
+## Recent Changes
+- 003-advanced-audio-mixer: Added Python 3.11 (後端), TypeScript 5.3 (前端) + FastAPI, Vue 3, Demucs, FFmpeg (rubberband), Tone.js
