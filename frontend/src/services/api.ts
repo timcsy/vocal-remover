@@ -89,6 +89,10 @@ class ApiService {
     return `${API_BASE}/jobs/${jobId}/download`;
   }
 
+  getStreamUrl(jobId: string): string {
+    return `${API_BASE}/jobs/${jobId}/stream`;
+  }
+
   async healthCheck(): Promise<HealthStatus> {
     return this.request<HealthStatus>('/health');
   }

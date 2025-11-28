@@ -42,8 +42,13 @@ const progressText = computed(() => {
 });
 
 const downloadUrl = computed(() => {
-  // 總是使用 API 下載端點，避免 MinIO 內部 URL 問題
+  // 使用 API 下載端點
   return api.getDownloadUrl(props.job.id);
+});
+
+const streamUrl = computed(() => {
+  // 使用支援 Range 請求的串流端點，讓影片可以 seek
+  return api.getStreamUrl(props.job.id);
 });
 
 const fileSizeText = computed(() => {
@@ -88,7 +93,7 @@ const durationText = computed(() => {
         <h3>伴奏影片預覽</h3>
         <div class="video-container">
           <video
-            :src="downloadUrl"
+            :src="streamUrl"
             controls
             preload="metadata"
           >

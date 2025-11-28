@@ -5,8 +5,8 @@ from datetime import datetime, timedelta
 from typing import Optional
 from urllib.parse import quote
 
-from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form
-from fastapi.responses import RedirectResponse, StreamingResponse
+from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form, Header
+from fastapi.responses import RedirectResponse, StreamingResponse, Response
 from pydantic import BaseModel, HttpUrl
 
 from app.core.config import get_settings
@@ -324,4 +324,82 @@ async def download_result(job_id: str):
             "Content-Disposition": f"attachment; filename*=UTF-8''{filename_encoded}",
             "Content-Length": str(file_size)
         }
+    )
+
+
+@router.get("/jobs/{job_id}/stream")
+async def stream_result(job_id: str, range: Optional[str] = Header(None)):
+    """
+    串流播放處理結果（支援 Range 請求）
+
+    用於影片預覽播放，支援跳轉播放位置
+    """
+    job = get_job_from_redis(job_id)
+    if not job:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "JOB_NOT_FOUND", "message": "任務不存在或已過期"}
+        )
+
+    if job.status != JobStatus.COMPLETED:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "JOB_NOT_COMPLETED", "message": "任務尚未完成"}
+        )
+
+    if not job.result_key:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "NO_RESULT", "message": "找不到結果檔案"}
+        )
+
+    storage = get_storage_service()
+    file_size = storage.get_file_size(job.result_key)
+
+    # 解析 Range header
+    start = 0
+    end = file_size - 1
+
+    if range:
+        # 格式: bytes=start-end
+        range_match = re.match(r'bytes=(\d+)-(\d*)', range)
+        if range_match:
+            start = int(range_match.group(1))
+            if range_match.group(2):
+                end = int(range_match.group(2))
+
+    # 限制範圍
+    if start >= file_size:
+        raise HTTPException(status_code=416, detail="Range not satisfiable")
+
+    end = min(end, file_size - 1)
+    content_length = end - start + 1
+
+    # 從 MinIO 取得指定範圍的資料
+    def range_file_iterator():
+        response = storage.client.get_object(
+            Bucket=storage.bucket,
+            Key=job.result_key,
+            Range=f"bytes={start}-{end}"
+        )
+        body = response['Body']
+        for chunk in body.iter_chunks(chunk_size=64 * 1024):  # 64KB chunks
+            yield chunk
+        body.close()
+
+    headers = {
+        "Content-Range": f"bytes {start}-{end}/{file_size}",
+        "Accept-Ranges": "bytes",
+        "Content-Length": str(content_length),
+        "Content-Type": "video/mp4",
+    }
+
+    # 如果有 Range 請求，返回 206 Partial Content
+    status_code = 206 if range else 200
+
+    return StreamingResponse(
+        range_file_iterator(),
+        status_code=status_code,
+        media_type="video/mp4",
+        headers=headers
     )
