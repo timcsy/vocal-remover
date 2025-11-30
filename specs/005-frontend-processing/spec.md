@@ -75,10 +75,10 @@
 
 ### Edge Cases
 
-- 使用者上傳超過 100MB 的大檔案時，如何處理？（建議顯示警告，可能導致瀏覽器記憶體不足）
+- 使用者上傳超過 100MB 的大檔案時？→ 顯示警告但允許繼續（軟限制），提示可能導致瀏覽器記憶體不足
 - 使用者在處理過程中關閉瀏覽器分頁，重新開啟後是否能恢復？（不能，顯示處理中斷提示）
 - IndexedDB 儲存空間已滿時如何處理？（顯示錯誤，建議刪除舊歌曲）
-- demucs-web ONNX 模型（~172MB）下載失敗時如何處理？（重試機制，離線時使用 Cache API 快取）
+- demucs-web ONNX 模型（~172MB）下載失敗時？→ 重試機制，成功後使用 Cache API 快取供離線使用；模型採延遲載入（點擊處理時才下載）
 - YouTube 影片因地區限制或年齡限制無法下載時？（顯示具體錯誤訊息）
 - 瀏覽器在分離過程中記憶體不足時？（捕獲錯誤，顯示「處理失敗，請嘗試較短的影片」）
 
@@ -123,7 +123,7 @@
   - sourceType: 'youtube' | 'upload'
   - sourceUrl: YouTube 來源網址（選填）
   - duration: 時長（秒）
-  - sampleRate: 取樣率
+  - sampleRate: 固定 44100 (44.1kHz)
   - createdAt: 建立時間
   - tracks: { drums, bass, other, vocals } ArrayBuffer
   - originalVideo: 原始影片 ArrayBuffer（用於下載合併）
@@ -134,14 +134,25 @@
   - progress: 0-100 百分比
   - error: 錯誤訊息（選填）
 
+## Clarifications
+
+### Session 2025-12-01
+
+- Q: 處理一首 3 分鐘歌曲的最長可接受時間？ → A: ≤5 分鐘（~1.5x 音訊長度）
+- Q: 100MB 檔案限制是軟限制還是硬限制？ → A: 軟限制（警告但允許繼續）
+- Q: 系統音訊取樣率標準？ → A: 固定 44.1kHz（CD 品質，demucs 原生支援）
+- Q: demucs 模型載入時機？ → A: 延遲載入（點擊處理時才下載，首頁載入快）
+- Q: 升降 Key 功能是否保留？ → A: 保留，使用 Tone.js PitchShift 實作前端升降 Key
+
 ## Success Criteria *(mandatory)*
 
 ### Measurable Outcomes
 
 - **SC-001**: 使用者可在純靜態環境（GitHub Pages）完成本地影片人聲分離
+- **SC-008**: 處理 3 分鐘歌曲應在 5 分鐘內完成（WebGPU 模式下更快）
 - **SC-002**: 使用者可在 Docker 環境使用 YouTube 下載功能
 - **SC-003**: 處理後歌曲可在瀏覽器關閉後重新載入（IndexedDB 持久化）
 - **SC-004**: 支援 Chrome 92+、Firefox 79+、Safari 15.2+ 瀏覽器
 - **SC-005**: 不支援的瀏覽器顯示明確警告訊息
-- **SC-006**: 現有 AudioMixer 即時混音播放功能正常運作
+- **SC-006**: 現有 AudioMixer 即時混音播放功能正常運作（含升降 Key，使用 Tone.js PitchShift）
 - **SC-007**: 下載功能在兩種模式下皆可正常輸出 MP4/MP3/M4A/WAV 格式
