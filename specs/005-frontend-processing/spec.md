@@ -49,9 +49,11 @@
 
 **Acceptance Scenarios**:
 
-1. **Given** 使用者已完成歌曲處理（純靜態模式），**When** 選擇 MP4 格式並點擊下載，**Then** ffmpeg.wasm 合併影片與混音音訊，瀏覽器下載檔案
-2. **Given** 使用者已完成歌曲處理（Docker 模式），**When** 選擇 MP4 格式並點擊下載，**Then** 後端 FFmpeg 合併（速度更快），串流下載檔案
-3. **Given** 使用者調整人聲音量為 0、伴奏音量為 1，**When** 下載，**Then** 輸出檔案僅包含伴奏音軌
+1. **Given** 使用者已完成歌曲處理，**When** 選擇 WAV 格式並點擊下載，**Then** Web Audio API 混音後直接下載（不需 ffmpeg）
+2. **Given** 使用者已完成歌曲處理，**When** 選擇 MP3 格式並點擊下載，**Then** 使用 lamejs 編碼後下載（純 JS，不需 ffmpeg）
+3. **Given** 使用者已完成歌曲處理（純靜態模式），**When** 選擇 MP4 格式並點擊下載，**Then** ffmpeg.wasm 合併影片與混音音訊，瀏覽器下載檔案
+4. **Given** 使用者已完成歌曲處理（Docker 模式），**When** 選擇 MP4/M4A 格式並點擊下載，**Then** 後端 FFmpeg 合併（速度更快），串流下載檔案
+5. **Given** 使用者調整人聲音量為 0、伴奏音量為 1，**When** 下載，**Then** 輸出檔案僅包含伴奏音軌
 
 ---
 
@@ -87,29 +89,31 @@
 **前端處理核心**
 - **FR-001**: 系統 MUST 使用 demucs-web 在瀏覽器執行音源分離（drums/bass/other/vocals）
 - **FR-002**: 系統 MUST 使用 ffmpeg.wasm 0.11.6 在瀏覽器提取影片音頻（純靜態模式）
-- **FR-003**: 系統 MUST 使用 ffmpeg.wasm 0.11.6 合併混音後音訊與原始影片（純靜態模式）
-- **FR-004**: 系統 MUST 使用 IndexedDB 持久化儲存處理結果（音軌 ArrayBuffer、原始影片）
+- **FR-003**: 系統 MUST 使用 Web Audio API (OfflineAudioContext) 混音並輸出 WAV 格式
+- **FR-004**: 系統 MUST 使用 lamejs 將混音結果編碼為 MP3 格式（純 JS，不需 ffmpeg）
+- **FR-005**: 系統 MUST 使用 ffmpeg.wasm 0.11.6 合併混音音訊與原始影片為 MP4/M4A（純靜態模式）
+- **FR-006**: 系統 MUST 使用 IndexedDB 持久化儲存處理結果（音軌 ArrayBuffer、原始影片）
 
 **雙模式架構**
-- **FR-005**: 系統 MUST 在啟動時偵測後端是否可用（/api/v1/health）
-- **FR-006**: 純靜態模式 MUST 隱藏 YouTube 輸入功能，顯示「請自行下載影片」提示
-- **FR-007**: Docker 模式 MUST 顯示 YouTube 輸入功能，使用後端 yt-dlp 下載
-- **FR-008**: Docker 模式 MUST 使用後端 FFmpeg 提取音頻和合併影片（效能優化）
+- **FR-007**: 系統 MUST 在啟動時偵測後端是否可用（/api/v1/health）
+- **FR-008**: 純靜態模式 MUST 隱藏 YouTube 輸入功能，顯示「請自行下載影片」提示
+- **FR-009**: Docker 模式 MUST 顯示 YouTube 輸入功能，使用後端 yt-dlp 下載
+- **FR-010**: Docker 模式 MUST 使用後端 FFmpeg 提取音頻和合併影片（效能優化）
 
 **COOP/COEP Headers**
-- **FR-009**: 純靜態模式 MUST 使用 coi-serviceworker 設定 COOP/COEP headers
-- **FR-010**: Docker 模式 MUST 透過 Nginx 設定 COOP/COEP headers
-- **FR-011**: 開發模式 MUST 透過 Vite config 設定 COOP/COEP headers
+- **FR-011**: 純靜態模式 MUST 使用 coi-serviceworker 設定 COOP/COEP headers
+- **FR-012**: Docker 模式 MUST 透過 Nginx 設定 COOP/COEP headers
+- **FR-013**: 開發模式 MUST 透過 Vite config 設定 COOP/COEP headers
 
 **瀏覽器相容性**
-- **FR-012**: 系統 MUST 在啟動時檢查 SharedArrayBuffer 支援
-- **FR-013**: 不支援 SharedArrayBuffer 時 MUST 顯示全螢幕警告，阻止使用
-- **FR-014**: 不支援 WebGPU 時 SHOULD 顯示效能警告，但允許使用（WASM fallback）
+- **FR-014**: 系統 MUST 在啟動時檢查 SharedArrayBuffer 支援
+- **FR-015**: 不支援 SharedArrayBuffer 時 MUST 顯示全螢幕警告，阻止使用
+- **FR-016**: 不支援 WebGPU 時 SHOULD 顯示效能警告，但允許使用（WASM fallback）
 
 **歌曲管理**
-- **FR-015**: 使用者 MUST 能夠查看所有已處理歌曲列表
-- **FR-016**: 使用者 MUST 能夠刪除單首歌曲
-- **FR-017**: 系統 SHOULD 顯示 IndexedDB 儲存使用量
+- **FR-017**: 使用者 MUST 能夠查看所有已處理歌曲列表
+- **FR-018**: 使用者 MUST 能夠刪除單首歌曲
+- **FR-019**: 系統 SHOULD 顯示 IndexedDB 儲存使用量
 
 ### Key Entities
 
