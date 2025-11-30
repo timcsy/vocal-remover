@@ -140,23 +140,23 @@
 
 ### Tests for User Story 4 ⚠️
 
-- [ ] T043 [P] [US4] 建立 YouTube API 端點測試 backend/tests/api/test_youtube.py
-- [ ] T044 [P] [US4] 建立 FFmpeg API 端點測試 backend/tests/api/test_ffmpeg.py
+- [X] T043 [P] [US4] 建立 YouTube API 端點測試 backend/tests/api/test_youtube.py
+- [X] T044 [P] [US4] 建立 FFmpeg API 端點測試 backend/tests/api/test_ffmpeg.py
 
 ### Backend Implementation
 
-- [ ] T045 [P] [US4] 建立 YouTube 代理 API 端點 backend/app/api/v1/youtube.py
-- [ ] T046 [P] [US4] 建立 FFmpeg 代理 API 端點（extract-audio, merge）於 backend/app/api/v1/ffmpeg.py
-- [ ] T047 [US4] 更新 backend/app/main.py 註冊新路由
-- [ ] T048 [US4] 簡化 backend/app/main.py 移除舊的 jobs API
-- [ ] T049 [US4] 執行後端測試確保全部通過
+- [X] T045 [P] [US4] 建立 YouTube 代理 API 端點 backend/app/api/v1/youtube.py
+- [X] T046 [P] [US4] 建立 FFmpeg 代理 API 端點（extract-audio, merge）於 backend/app/api/v1/ffmpeg.py
+- [X] T047 [US4] 更新 backend/app/main.py 註冊新路由
+- [ ] T048 [US4] 簡化 backend/app/main.py 移除舊的 jobs API (Phase 7)
+- [X] T049 [US4] 執行後端測試確保全部通過
 
 ### Frontend Implementation
 
-- [ ] T050 [US4] 修改 frontend/src/components/AddSongModal.vue 根據後端可用性顯示/隱藏 YouTube 輸入
-- [ ] T051 [US4] 實作 YouTube 下載處理流程於 useLocalProcessor.ts
-- [ ] T052 [US4] 加入純靜態模式時的「請自行下載影片」提示
-- [ ] T053 [US4] 加入 YouTube 網址驗證和錯誤處理
+- [X] T050 [US4] 修改 frontend/src/components/AddSongModal.vue 根據後端可用性顯示/隱藏 YouTube 輸入
+- [X] T051 [US4] 實作 YouTube 下載處理流程於 useLocalProcessor.ts
+- [X] T052 [US4] 加入純靜態模式時的「請自行下載影片」提示
+- [X] T053 [US4] 加入 YouTube 網址驗證和錯誤處理
 
 **Checkpoint**: 所有使用者故事完成 - Docker 部署功能完整
 

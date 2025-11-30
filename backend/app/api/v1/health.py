@@ -37,5 +37,10 @@ async def health_check():
         "storage": storage_ok,
         "processing_jobs": processing_count,
         "max_concurrent_jobs": settings.max_concurrent_jobs,
-        "version": "1.0.0"
+        "version": "1.0.0",
+        # 005-frontend-processing: 告訴前端後端支援的功能
+        "features": {
+            "youtube": True,  # 支援 YouTube 下載
+            "ffmpeg": True,   # 支援後端 FFmpeg 處理
+        }
     }

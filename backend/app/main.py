@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.core.config import get_settings
-from app.api.v1 import health, jobs
+from app.api.v1 import health, jobs, youtube, ffmpeg
 
 # 設定 logging
 logging.basicConfig(
@@ -61,6 +61,8 @@ async def global_exception_handler(request: Request, exc: Exception):
 # Register routers
 app.include_router(health.router, prefix="/api/v1", tags=["健康檢查"])
 app.include_router(jobs.router, prefix="/api/v1", tags=["任務管理"])
+app.include_router(youtube.router, prefix="/api/v1", tags=["YouTube"])
+app.include_router(ffmpeg.router, prefix="/api/v1", tags=["FFmpeg"])
 
 
 @app.get("/")
