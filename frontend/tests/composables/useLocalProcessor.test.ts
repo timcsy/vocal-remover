@@ -4,12 +4,63 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 
+// 建立有效的 WAV buffer
+function createValidWavBuffer(): ArrayBuffer {
+  // 建立最小的有效 WAV 檔案（44 byte header + 音頻資料）
+  const sampleRate = 44100
+  const numChannels = 2
+  const bitsPerSample = 16
+  const numSamples = 1024 // 每個聲道的樣本數
+  const dataSize = numSamples * numChannels * (bitsPerSample / 8)
+  const headerSize = 44
+  const buffer = new ArrayBuffer(headerSize + dataSize)
+  const view = new DataView(buffer)
+
+  // RIFF header
+  view.setUint8(0, 0x52) // 'R'
+  view.setUint8(1, 0x49) // 'I'
+  view.setUint8(2, 0x46) // 'F'
+  view.setUint8(3, 0x46) // 'F'
+  view.setUint32(4, 36 + dataSize, true) // file size - 8
+  view.setUint8(8, 0x57) // 'W'
+  view.setUint8(9, 0x41) // 'A'
+  view.setUint8(10, 0x56) // 'V'
+  view.setUint8(11, 0x45) // 'E'
+
+  // fmt chunk
+  view.setUint8(12, 0x66) // 'f'
+  view.setUint8(13, 0x6d) // 'm'
+  view.setUint8(14, 0x74) // 't'
+  view.setUint8(15, 0x20) // ' '
+  view.setUint32(16, 16, true) // chunk size
+  view.setUint16(20, 1, true) // audio format (PCM)
+  view.setUint16(22, numChannels, true)
+  view.setUint32(24, sampleRate, true)
+  view.setUint32(28, sampleRate * numChannels * (bitsPerSample / 8), true) // byte rate
+  view.setUint16(32, numChannels * (bitsPerSample / 8), true) // block align
+  view.setUint16(34, bitsPerSample, true)
+
+  // data chunk
+  view.setUint8(36, 0x64) // 'd'
+  view.setUint8(37, 0x61) // 'a'
+  view.setUint8(38, 0x74) // 't'
+  view.setUint8(39, 0x61) // 'a'
+  view.setUint32(40, dataSize, true)
+
+  // 填入靜音資料
+  for (let i = 44; i < headerSize + dataSize; i++) {
+    view.setUint8(i, 0)
+  }
+
+  return buffer
+}
+
 // Mock services
 vi.mock('@/services/ffmpegService', () => ({
   ffmpegService: {
     initialize: vi.fn().mockResolvedValue(undefined),
     isLoaded: vi.fn().mockReturnValue(true),
-    extractAudio: vi.fn().mockResolvedValue(new ArrayBuffer(1024)),
+    extractAudio: vi.fn().mockImplementation(() => Promise.resolve(createValidWavBuffer())),
   },
 }))
 

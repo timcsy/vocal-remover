@@ -74,13 +74,13 @@
 
 - [X] T020 [US1] 建立本地處理流程 composable frontend/src/composables/useLocalProcessor.ts
 - [X] T021 [US1] 修改 frontend/src/composables/useJobManager.ts 改用 IndexedDB 儲存
-- [ ] T022 [US1] 修改 frontend/src/composables/useWebAudio.ts 支援從 ArrayBuffer 載入音軌
-- [ ] T023 [US1] 修改 frontend/src/components/AddSongModal.vue 整合本地處理流程
-- [ ] T024 [US1] 加入處理進度顯示（多階段：提取音頻 → 分離人聲 → 儲存）
-- [ ] T025 [US1] 加入瀏覽器不支援時的全螢幕警告元件
-- [ ] T026 [US1] 加入 WebGPU 不支援時的效能警告提示
-- [ ] T027 [US1] 加入檔案大小超過 100MB 的軟限制警告
-- [ ] T028 [US1] 執行 US1 測試確保全部通過
+- [X] T022 [US1] 修改 frontend/src/composables/useWebAudio.ts 支援從 ArrayBuffer 載入音軌
+- [X] T023 [US1] 修改 frontend/src/components/AddSongModal.vue 整合本地處理流程
+- [X] T024 [US1] 加入處理進度顯示（多階段：提取音頻 → 分離人聲 → 儲存）
+- [X] T025 [US1] 加入瀏覽器不支援時的全螢幕警告元件
+- [X] T026 [US1] 加入 WebGPU 不支援時的效能警告提示
+- [X] T027 [US1] 加入檔案大小超過 100MB 的軟限制警告
+- [X] T028 [US1] 執行 US1 測試確保全部通過
 
 **Checkpoint**: User Story 1 完成 - 可獨立測試本地上傳處理功能
 

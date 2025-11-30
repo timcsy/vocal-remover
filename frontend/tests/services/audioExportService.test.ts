@@ -46,6 +46,14 @@ describe('AudioExportService', () => {
         duration: 10,
         getChannelData: vi.fn().mockReturnValue(new Float32Array(44100 * 10)),
       }),
+      createBuffer: vi.fn().mockImplementation((channels: number, length: number, sampleRate: number) => ({
+        numberOfChannels: channels,
+        sampleRate,
+        length,
+        duration: length / sampleRate,
+        getChannelData: vi.fn().mockReturnValue(new Float32Array(length)),
+      })),
+      close: vi.fn().mockResolvedValue(undefined),
     }))
 
     vi.stubGlobal('AudioContext', mockAudioContext)

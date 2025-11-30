@@ -10,23 +10,20 @@ import AddSongModal from './components/AddSongModal.vue';
 import TaskQueue from './components/TaskQueue.vue';
 import TaskDetailModal from './components/TaskDetailModal.vue';
 import ImportConflictModal from './components/ImportConflictModal.vue';
+import BrowserWarning from './components/BrowserWarning.vue';
 
 // 瀏覽器與後端功能狀態
 const browserCapabilities = ref<BrowserCapabilities | null>(null);
 const backendCapabilities = ref<BackendCapabilities | null>(null);
-const browserWarnings = ref<string[]>([]);
 const isInitialized = ref(false);
-const showBrowserWarning = ref(false);
 
 // 初始化應用程式
 onMounted(async () => {
   // 1. 檢查瀏覽器相容性
   browserCapabilities.value = browserCheck.check();
-  browserWarnings.value = browserCheck.getWarnings();
 
-  // 如果不支援核心功能，顯示警告
+  // 如果不支援核心功能，不繼續初始化
   if (!browserCheck.isSupported()) {
-    showBrowserWarning.value = true;
     return;
   }
 
@@ -39,11 +36,6 @@ onMounted(async () => {
   // 4. 重新整理任務列表
   refreshJobs();
 });
-
-// 關閉瀏覽器警告（僅用於 WebGPU 等非致命警告）
-function dismissWarning() {
-  showBrowserWarning.value = false;
-}
 
 // 全域狀態管理
 const {
@@ -207,32 +199,11 @@ function handleCloseTaskDetail() {
 
 <template>
   <div class="app">
-    <!-- 瀏覽器不支援警告（致命錯誤：SharedArrayBuffer 不可用） -->
-    <div v-if="showBrowserWarning && !browserCapabilities?.sharedArrayBuffer" class="browser-error">
-      <div class="browser-error-content">
-        <h2>瀏覽器不支援</h2>
-        <p>您的瀏覽器不支援本服務所需的功能（SharedArrayBuffer）。</p>
-        <p>請使用以下瀏覽器：</p>
-        <ul>
-          <li>Chrome 92+</li>
-          <li>Firefox 79+</li>
-          <li>Safari 15.2+</li>
-          <li>Edge 92+</li>
-        </ul>
-        <p class="note">提示：請確認網站使用 HTTPS 協定。</p>
-      </div>
-    </div>
-
-    <!-- WebGPU 不支援警告（非致命：可關閉） -->
-    <div
-      v-else-if="showBrowserWarning && browserCapabilities?.sharedArrayBuffer && !browserCapabilities?.webGPU"
-      class="browser-warning"
-    >
-      <div class="browser-warning-content">
-        <span>⚠️ 您的瀏覽器不支援 WebGPU，將使用較慢的 WASM 模式處理。</span>
-        <button @click="dismissWarning">了解</button>
-      </div>
-    </div>
+    <!-- 瀏覽器相容性警告元件 -->
+    <BrowserWarning
+      v-if="browserCapabilities"
+      :capabilities="browserCapabilities"
+    />
 
     <!-- 主應用內容（僅在初始化完成後顯示） -->
     <template v-if="isInitialized">
@@ -292,8 +263,8 @@ function handleCloseTaskDetail() {
     />
     </template>
 
-    <!-- 載入中畫面 -->
-    <div v-if="!isInitialized && !showBrowserWarning" class="loading">
+    <!-- 載入中畫面（僅當瀏覽器支援且尚未初始化時顯示） -->
+    <div v-if="!isInitialized && browserCapabilities?.sharedArrayBuffer && browserCapabilities?.indexedDB" class="loading">
       <div class="loading-spinner"></div>
       <p>正在初始化...</p>
     </div>
@@ -316,80 +287,6 @@ body {
 
 .app {
   min-height: 100vh;
-}
-
-/* 瀏覽器不支援警告（致命） */
-.browser-error {
-  position: fixed;
-  inset: 0;
-  background: #121212;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 9999;
-}
-
-.browser-error-content {
-  background: #1e1e1e;
-  border: 1px solid #ff4444;
-  border-radius: 12px;
-  padding: 32px;
-  max-width: 400px;
-  text-align: center;
-}
-
-.browser-error-content h2 {
-  color: #ff4444;
-  margin-bottom: 16px;
-}
-
-.browser-error-content ul {
-  list-style: none;
-  margin: 16px 0;
-}
-
-.browser-error-content li {
-  padding: 4px 0;
-}
-
-.browser-error-content .note {
-  color: #888;
-  font-size: 14px;
-  margin-top: 16px;
-}
-
-/* WebGPU 不支援警告（非致命） */
-.browser-warning {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  background: #ff9800;
-  color: #000;
-  z-index: 9999;
-}
-
-.browser-warning-content {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 20px;
-  max-width: 1200px;
-  margin: 0 auto;
-}
-
-.browser-warning button {
-  background: rgba(0, 0, 0, 0.2);
-  border: none;
-  padding: 6px 16px;
-  border-radius: 4px;
-  cursor: pointer;
-  color: #000;
-  font-weight: 500;
-}
-
-.browser-warning button:hover {
-  background: rgba(0, 0, 0, 0.3);
 }
 
 /* 載入中 */

@@ -32,6 +32,10 @@ describe('BrowserCheck', () => {
     it('應該偵測 SharedArrayBuffer 不支援狀態', async () => {
       // Arrange: 模擬不支援 SharedArrayBuffer
       vi.stubGlobal('crossOriginIsolated', false)
+      // 模擬 SharedArrayBuffer 建構時拋出錯誤
+      vi.stubGlobal('SharedArrayBuffer', function() {
+        throw new Error('SharedArrayBuffer is not available')
+      })
 
       const { browserCheck } = await import('@/utils/browserCheck')
 
