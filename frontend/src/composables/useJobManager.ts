@@ -2,14 +2,20 @@
  * useJobManager - 全域狀態管理
  *
  * 管理已完成歌曲列表、處理中任務列表、選中狀態、抽屜狀態等
+ * 支援雙模式：
+ * - 純靜態模式：從 IndexedDB 載入本地歌曲
+ * - Docker 模式：從後端 API 載入 + IndexedDB 本地歌曲
  */
 import { ref, computed, readonly, onMounted, onUnmounted } from 'vue'
-import { api, type CompletedJob, type ProcessingJob } from '@/services/api'
+import { api, type CompletedJob, type ProcessingJob, getBackendCapabilities } from '@/services/api'
+import { storageService, type SongRecord } from '@/services/storageService'
 
 // 全域狀態（單例模式）
 const completedJobs = ref<CompletedJob[]>([])
 const processingJobs = ref<ProcessingJob[]>([])
+const localSongs = ref<SongRecord[]>([]) // IndexedDB 本地歌曲
 const selectedJobId = ref<string | null>(null)
+const selectedSong = ref<SongRecord | null>(null) // 完整的歌曲資料
 const drawerOpen = ref(window.innerWidth >= 768) // 桌面版預設開啟
 const selectedJobIds = ref<Set<string>>(new Set()) // 勾選的歌曲（用於匯出）
 const isPolling = ref(false)
@@ -18,12 +24,34 @@ const error = ref<string | null>(null)
 let pollIntervalId: number | null = null
 const POLL_INTERVAL = 2000 // 2 秒
 
-// 輪詢邏輯
+// 從 IndexedDB 載入本地歌曲
+async function fetchLocalSongs() {
+  try {
+    await storageService.init()
+    localSongs.value = await storageService.getAllSongs()
+  } catch (err) {
+    console.error('Failed to fetch local songs:', err)
+  }
+}
+
+// 輪詢邏輯（僅 Docker 模式使用）
 async function fetchJobs() {
   try {
-    const response = await api.getJobs()
-    completedJobs.value = response.jobs
-    processingJobs.value = response.processing
+    const backend = getBackendCapabilities()
+
+    // 總是載入本地歌曲
+    await fetchLocalSongs()
+
+    // 如果後端可用，也載入後端任務
+    if (backend.available) {
+      const response = await api.getJobs()
+      completedJobs.value = response.jobs
+      processingJobs.value = response.processing
+    } else {
+      completedJobs.value = []
+      processingJobs.value = []
+    }
+
     error.value = null
   } catch (err) {
     error.value = err instanceof Error ? err.message : '載入失敗'
@@ -47,8 +75,33 @@ function stopPolling() {
 }
 
 // 選取歌曲
-function selectJob(jobId: string | null) {
+async function selectJob(jobId: string | null) {
   selectedJobId.value = jobId
+
+  if (jobId) {
+    // 優先從本地歌曲載入
+    const localSong = localSongs.value.find(s => s.id === jobId)
+    if (localSong) {
+      selectedSong.value = localSong
+      return
+    }
+
+    // 嘗試從 IndexedDB 載入
+    try {
+      const song = await storageService.getSong(jobId)
+      if (song) {
+        selectedSong.value = song
+        return
+      }
+    } catch (err) {
+      console.error('Failed to load song:', err)
+    }
+
+    // 後端歌曲沒有完整資料，只有列表資訊
+    selectedSong.value = null
+  } else {
+    selectedSong.value = null
+  }
 }
 
 // 切換抽屜
@@ -82,13 +135,24 @@ function deselectAllJobs() {
 // 刪除歌曲
 async function deleteJob(jobId: string): Promise<boolean> {
   try {
-    await api.deleteJob(jobId)
-    // 從列表中移除
-    completedJobs.value = completedJobs.value.filter(j => j.id !== jobId)
-    processingJobs.value = processingJobs.value.filter(j => j.id !== jobId)
+    // 檢查是否為本地歌曲
+    const isLocalSong = localSongs.value.some(s => s.id === jobId)
+
+    if (isLocalSong) {
+      // 從 IndexedDB 刪除
+      await storageService.deleteSong(jobId)
+      localSongs.value = localSongs.value.filter(s => s.id !== jobId)
+    } else {
+      // 從後端刪除
+      await api.deleteJob(jobId)
+      completedJobs.value = completedJobs.value.filter(j => j.id !== jobId)
+      processingJobs.value = processingJobs.value.filter(j => j.id !== jobId)
+    }
+
     // 取消選取
     if (selectedJobId.value === jobId) {
       selectedJobId.value = null
+      selectedSong.value = null
     }
     selectedJobIds.value.delete(jobId)
     return true
@@ -103,10 +167,41 @@ async function refreshJobs() {
   await fetchJobs()
 }
 
-// 取得選中的歌曲
+// 取得選中的歌曲（用於列表顯示）
 const selectedJob = computed(() => {
   if (!selectedJobId.value) return null
+  // 優先從本地歌曲找
+  const local = localSongs.value.find(s => s.id === selectedJobId.value)
+  if (local) {
+    return {
+      id: local.id,
+      source_title: local.title,
+      source_type: local.sourceType,
+      status: 'completed' as const,
+      original_duration: local.duration,
+      created_at: local.createdAt.toISOString(),
+    }
+  }
   return completedJobs.value.find(j => j.id === selectedJobId.value) || null
+})
+
+// 合併本地歌曲和後端歌曲的列表
+const allCompletedJobs = computed(() => {
+  // 將本地歌曲轉換為 CompletedJob 格式
+  const localAsJobs: CompletedJob[] = localSongs.value.map(s => ({
+    id: s.id,
+    source_title: s.title,
+    source_type: s.sourceType,
+    status: 'completed' as const,
+    original_duration: s.duration,
+    created_at: s.createdAt.toISOString(),
+  }))
+
+  // 合併並去重（本地優先）
+  const localIds = new Set(localAsJobs.map(j => j.id))
+  const backendJobs = completedJobs.value.filter(j => !localIds.has(j.id))
+
+  return [...localAsJobs, ...backendJobs]
 })
 
 // 是否有處理中任務
@@ -117,6 +212,11 @@ const hasSelectedJobs = computed(() => selectedJobIds.value.size > 0)
 
 // 選中歌曲數量
 const selectedJobCount = computed(() => selectedJobIds.value.size)
+
+// 取得儲存使用量
+async function getStorageUsage() {
+  return storageService.getStorageUsage()
+}
 
 export function useJobManager() {
   // 生命週期管理
@@ -136,9 +236,11 @@ export function useJobManager() {
 
   return {
     // 狀態（唯讀）
-    completedJobs: readonly(completedJobs),
+    completedJobs: allCompletedJobs, // 使用合併後的列表
+    localSongs: readonly(localSongs),
     processingJobs: readonly(processingJobs),
     selectedJobId: readonly(selectedJobId),
+    selectedSong: readonly(selectedSong), // 完整歌曲資料
     drawerOpen: readonly(drawerOpen),
     selectedJobIds: readonly(selectedJobIds),
     isPolling: readonly(isPolling),
@@ -159,6 +261,7 @@ export function useJobManager() {
     deselectAllJobs,
     deleteJob,
     refreshJobs,
+    getStorageUsage,
     startPolling,
     stopPolling,
   }

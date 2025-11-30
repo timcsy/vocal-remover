@@ -67,13 +67,13 @@
 
 > **NOTE: 先寫測試，確保測試 FAIL 後再實作**
 
-- [ ] T018 [P] [US1] 建立 useLocalProcessor 單元測試 frontend/tests/composables/useLocalProcessor.test.ts
-- [ ] T019 [P] [US1] 建立 useJobManager 單元測試（IndexedDB 整合）frontend/tests/composables/useJobManager.test.ts
+- [X] T018 [P] [US1] 建立 useLocalProcessor 單元測試 frontend/tests/composables/useLocalProcessor.test.ts
+- [X] T019 [P] [US1] 建立 useJobManager 單元測試（IndexedDB 整合）frontend/tests/composables/useJobManager.test.ts
 
 ### Implementation for User Story 1
 
-- [ ] T020 [US1] 建立本地處理流程 composable frontend/src/composables/useLocalProcessor.ts
-- [ ] T021 [US1] 修改 frontend/src/composables/useJobManager.ts 改用 IndexedDB 儲存
+- [X] T020 [US1] 建立本地處理流程 composable frontend/src/composables/useLocalProcessor.ts
+- [X] T021 [US1] 修改 frontend/src/composables/useJobManager.ts 改用 IndexedDB 儲存
 - [ ] T022 [US1] 修改 frontend/src/composables/useWebAudio.ts 支援從 ArrayBuffer 載入音軌
 - [ ] T023 [US1] 修改 frontend/src/components/AddSongModal.vue 整合本地處理流程
 - [ ] T024 [US1] 加入處理進度顯示（多階段：提取音頻 → 分離人聲 → 儲存）
