@@ -24,7 +24,7 @@ GitHub Pages: https://timcsy.github.io/song-mixer/
 
 ### 純前端模式（GitHub Pages）
 
-直接訪問 https://timcsy.github.io/song-mixer/，上傳本地檔案即可處理。
+直接訪問 https://timcsy.github.io/song-mixer/ ，上傳本地檔案即可處理。
 
 ### Docker 模式（支援 YouTube）
 
