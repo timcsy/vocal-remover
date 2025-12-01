@@ -9,29 +9,27 @@ import * as ort from 'onnxruntime-web'
 import { DemucsProcessor, CONSTANTS } from 'demucs-web'
 import type { SeparationResult } from '@/types/storage'
 import { stereoFloat32ToInt16Buffer, int16BufferToStereoFloat32 } from '@/utils/format'
-import { settingsService, isWebGPUSupported } from '@/services/settingsService'
 
 // 設定 ONNX Runtime WASM 檔案路徑
 // 使用 jsDelivr CDN（支援 CORS，版本須與 npm 一致）
 ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.23.2/dist/'
 
 /**
- * 根據設定配置 ONNX Runtime 執行提供者
+ * 檢查瀏覽器是否支援 WebGPU
+ */
+function isWebGPUSupported(): boolean {
+  return typeof navigator !== 'undefined' && 'gpu' in navigator
+}
+
+/**
+ * 配置 ONNX Runtime 執行提供者
+ * 自動判斷是否使用 WebGPU
  */
 function configureOnnxRuntime(): void {
-  const useWebGPU = settingsService.getUseWebGPU()
-
-  if (useWebGPU && isWebGPUSupported()) {
-    // 啟用 WebGPU
-    console.log('[Demucs] 使用 WebGPU 加速')
+  if (isWebGPUSupported()) {
+    console.log('[Demucs] 偵測到 WebGPU 支援，使用 WebGPU 加速')
   } else {
-    // 強制使用 WASM（停用 WebGPU）
-    // 透過環境變數停用 WebGPU
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const env = ort.env as any
-    if (env.webgpu) {
-      env.webgpu.disabled = true
-    }
+    // 不支援 WebGPU，使用 WASM（CPU）模式
     console.log('[Demucs] 使用 WASM（CPU）模式')
   }
 }
@@ -83,7 +81,7 @@ class DemucsService {
    */
   private async loadModel(onDownloadProgress?: DownloadProgressCallback): Promise<void> {
     try {
-      // 根據設定配置 ONNX Runtime
+      // 配置 ONNX Runtime（自動判斷 WebGPU 支援）
       configureOnnxRuntime()
 
       // 儲存下載進度回呼
