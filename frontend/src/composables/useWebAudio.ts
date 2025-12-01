@@ -3,8 +3,7 @@ import * as Tone from 'tone';
 import { DEFAULT_VOLUMES, type TrackName, type TrackState } from '@/types/audio';
 import type { SongRecord } from '@/types/storage';
 import { int16BufferToStereoFloat32 } from '@/utils/format';
-
-const API_BASE = '/api/v1';
+import { storageService } from '@/services/storageService';
 
 export interface UseWebAudioOptions {
   /** 後端 job ID（Docker 模式） */
@@ -94,10 +93,8 @@ export function useWebAudio(options: UseWebAudioOptions): UseWebAudioReturn {
     return Object.values(tracks).some(t => t.loaded);
   });
 
-  // Track URL helper
-  const getTrackUrl = (track: TrackName): string => {
-    return `${API_BASE}/jobs/${jobId}/tracks/${track}`;
-  };
+  // 本地歌曲資料（從 IndexedDB 載入）
+  let localSongRecord = ref<SongRecord | null>(songRecord ?? null);
 
   // Update current time during playback
   const updateTime = () => {
@@ -170,14 +167,15 @@ export function useWebAudio(options: UseWebAudioOptions): UseWebAudioReturn {
    * 從 SongRecord（IndexedDB）載入音軌
    */
   const loadTracksFromSongRecord = async (): Promise<void> => {
-    if (!songRecord) return;
+    const record = localSongRecord.value;
+    if (!record) return;
 
-    duration.value = songRecord.duration;
+    duration.value = record.duration;
 
     const trackNames: TrackName[] = ['drums', 'bass', 'other', 'vocals'];
     const loadPromises = trackNames.map(async (trackName) => {
       try {
-        const trackBuffer = songRecord.tracks[trackName];
+        const trackBuffer = record.tracks[trackName];
         if (!trackBuffer) {
           tracks[trackName].error = '音軌不存在';
           return;
@@ -186,7 +184,7 @@ export function useWebAudio(options: UseWebAudioOptions): UseWebAudioReturn {
         // 將 ArrayBuffer 轉換為 AudioBuffer
         const audioBuffer = await arrayBufferToAudioBuffer(
           trackBuffer,
-          songRecord.sampleRate
+          record.sampleRate
         );
 
         // 建立 Gain 節點
@@ -210,58 +208,17 @@ export function useWebAudio(options: UseWebAudioOptions): UseWebAudioReturn {
   };
 
   /**
-   * 從後端 API 載入音軌
+   * 從 IndexedDB 載入歌曲資料（透過 jobId）
    */
-  const loadTracksFromApi = async (): Promise<void> => {
+  const loadSongFromIndexedDB = async (): Promise<void> => {
     if (!jobId) return;
 
-    // Fetch tracks info first
-    const response = await fetch(`${API_BASE}/jobs/${jobId}/tracks`);
-    if (!response.ok) {
-      throw new Error('無法取得音軌資訊');
+    await storageService.init();
+    const song = await storageService.getSong(jobId);
+    if (!song) {
+      throw new Error('找不到歌曲資料');
     }
-    const tracksInfo = await response.json();
-    duration.value = tracksInfo.duration;
-
-    // Load each available track in parallel
-    const trackNames: TrackName[] = ['drums', 'bass', 'other', 'vocals'];
-    const loadPromises = trackNames.map((trackName) => {
-      if (!tracksInfo.tracks.includes(trackName)) {
-        tracks[trackName].error = '音軌不存在';
-        return Promise.resolve();
-      }
-
-      return new Promise<void>((resolve) => {
-        try {
-          // Create gain node for volume control
-          const gain = new Tone.Gain(tracks[trackName].volume);
-          gain.connect(pitchShifter!);
-          gainNodes[trackName] = gain;
-
-          // Create player with Promise-based loading
-          const player = new Tone.Player({
-            url: getTrackUrl(trackName),
-            onload: () => {
-              tracks[trackName].loaded = true;
-              resolve();
-            },
-            onerror: (err) => {
-              tracks[trackName].error = `載入失敗: ${err}`;
-              resolve(); // Still resolve to not block other tracks
-            },
-          });
-
-          player.connect(gain);
-          player.sync().start(0);
-          players[trackName] = player;
-        } catch (err) {
-          tracks[trackName].error = `載入失敗: ${err}`;
-          resolve();
-        }
-      });
-    });
-
-    await Promise.all(loadPromises);
+    localSongRecord.value = song;
   };
 
   // Load all tracks
@@ -292,12 +249,13 @@ export function useWebAudio(options: UseWebAudioOptions): UseWebAudioReturn {
       }).connect(masterGain);
 
       // 根據來源載入音軌
-      if (songRecord) {
-        // 從本地 SongRecord（IndexedDB）載入
+      // 優先使用已提供的 songRecord，否則從 IndexedDB 載入
+      if (!localSongRecord.value && jobId) {
+        await loadSongFromIndexedDB();
+      }
+
+      if (localSongRecord.value) {
         await loadTracksFromSongRecord();
-      } else if (jobId) {
-        // 從後端 API 載入
-        await loadTracksFromApi();
       } else {
         throw new Error('必須提供 jobId 或 songRecord');
       }

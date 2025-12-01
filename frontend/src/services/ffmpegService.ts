@@ -292,6 +292,68 @@ class FFmpegService {
   }
 
   /**
+   * 合併無聲影片與音訊檔案（直接 mux，不重新編碼）
+   * @param videoBlob 無聲影片
+   * @param audioBlob 音訊檔案
+   * @param onProgress 進度回呼
+   * @returns 合併後的影片 ArrayBuffer
+   */
+  async muxVideoAudio(
+    videoBlob: Blob,
+    audioBlob: Blob,
+    onProgress?: (progress: number) => void
+  ): Promise<ArrayBuffer> {
+    if (!this.ffmpeg || !this.ffmpeg.isLoaded()) {
+      await this.initialize()
+    }
+
+    if (!this.ffmpeg) {
+      throw new Error('FFmpeg 初始化失敗')
+    }
+
+    this.progressCallback = onProgress || null
+
+    try {
+      // 寫入輸入檔案
+      const videoData = await FFmpeg.fetchFile(videoBlob)
+      const audioData = await FFmpeg.fetchFile(audioBlob)
+
+      // 根據 blob type 判斷副檔名
+      const videoExt = videoBlob.type.includes('webm') ? 'webm' : 'mp4'
+      const audioExt = audioBlob.type.includes('webm') ? 'webm' : 'm4a'
+
+      this.ffmpeg.FS('writeFile', `input.${videoExt}`, videoData)
+      this.ffmpeg.FS('writeFile', `input.${audioExt}`, audioData)
+
+      // 執行 mux：直接複製影片和音訊串流（不重新編碼）
+      await this.ffmpeg.run(
+        '-i', `input.${videoExt}`,
+        '-i', `input.${audioExt}`,
+        '-c:v', 'copy',
+        '-c:a', 'copy',
+        '-map', '0:v:0',
+        '-map', '1:a:0',
+        '-shortest',
+        'output.mp4'
+      )
+
+      // 讀取輸出
+      const outputData = this.ffmpeg.FS('readFile', 'output.mp4')
+
+      // 清理暫存檔案
+      this.ffmpeg.FS('unlink', `input.${videoExt}`)
+      this.ffmpeg.FS('unlink', `input.${audioExt}`)
+      this.ffmpeg.FS('unlink', 'output.mp4')
+
+      return outputData.buffer
+    } catch (error) {
+      throw new Error(`影片合併失敗: ${error instanceof Error ? error.message : '未知錯誤'}`)
+    } finally {
+      this.progressCallback = null
+    }
+  }
+
+  /**
    * 釋放資源
    */
   dispose(): void {

@@ -1,6 +1,5 @@
-# 005-frontend-processing Architecture
-# Docker image for YouTube proxy only
-# All media processing (FFmpeg, Demucs) is handled by the frontend (ffmpeg.wasm, demucs-web)
+# 精簡版 Docker image - 僅 YouTube 下載代理
+# 所有媒體處理（FFmpeg、Demucs）皆在前端執行
 
 # Stage 1: Build frontend
 FROM node:20-alpine AS frontend-builder
@@ -8,52 +7,45 @@ FROM node:20-alpine AS frontend-builder
 WORKDIR /app/frontend
 
 COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci
+RUN npm ci --production=false
 
 COPY frontend/ .
 RUN npm run build
 
-# Stage 2: Final image (ultra-lightweight - only yt-dlp for YouTube)
-FROM python:3.11-slim
+# Stage 2: Final image (Alpine - 最小化)
+FROM python:3.11-alpine
 
-# Install system dependencies (minimal - only Nginx/Supervisor for serving)
-RUN apt-get update && apt-get install -y \
+# 安裝最小依賴
+RUN apk add --no-cache \
     nginx \
     supervisor \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
+    curl
 
 WORKDIR /app
 
-# Install Python dependencies
+# 安裝 Python 依賴
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy backend application
+# 複製後端（僅 YouTube 代理）
 COPY backend/app/ ./app/
 
-# Copy frontend build
+# 複製前端建置結果
 COPY --from=frontend-builder /app/frontend/dist /usr/share/nginx/html
 
-# Copy configuration files
-COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
+# 複製設定檔
+COPY docker/nginx.conf /etc/nginx/http.d/default.conf
 COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
-# Remove default nginx config
-RUN rm -f /etc/nginx/sites-enabled/default
+# 建立暫存目錄（下載後立即刪除）
+RUN mkdir -p /tmp/youtube-downloads
 
-# Create data directories
-RUN mkdir -p /data/uploads /data/results && \
-    chmod -R 755 /data
-
-# Environment variables
-ENV DATA_DIR=/data
-ENV UPLOADS_DIR=/data/uploads
-ENV RESULTS_DIR=/data/results
+# 環境變數
+ENV PYTHONUNBUFFERED=1
 
 EXPOSE 80
 
-# Health check
+# 健康檢查
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
     CMD curl -f http://localhost/api/v1/health || exit 1
 

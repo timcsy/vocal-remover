@@ -66,6 +66,8 @@ export interface ProcessingState {
   error: string | null
   /** 處理完成後的 SongRecord.id */
   songId?: string
+  /** 來源類型：youtube 或 upload */
+  sourceType?: 'youtube' | 'upload'
 }
 
 /**

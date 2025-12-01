@@ -86,10 +86,9 @@ defineEmits<{
 // 判斷是否為本地處理任務
 const isLocalJob = computed(() => props.job.id === 'local-processing')
 
-// 判斷是否為 YouTube 來源（根據 current_stage 訊息判斷）
+// 判斷是否為 YouTube 來源（使用 source_type 欄位）
 const isYouTubeSource = computed(() => {
-  const msg = props.job.current_stage || ''
-  return msg.includes('YouTube') || msg.includes('下載影片')
+  return props.job.source_type === 'youtube'
 })
 
 // 本地處理階段定義（上傳檔案）
@@ -103,11 +102,11 @@ const localUploadStages = [
 
 // 本地處理階段定義（YouTube）
 const localYouTubeStages = [
-  { id: 'downloading', name: '下載影片', description: '從 YouTube 下載影片' },
-  { id: 'extracting', name: '載入引擎', description: '載入 FFmpeg 引擎' },
-  { id: 'extracting_audio', name: '提取音頻', description: '從影片提取音頻' },
+  { id: 'downloading', name: '下載影片', description: '從 YouTube 下載影片與音訊' },
+  { id: 'extracting', name: '轉換音訊', description: '載入 FFmpeg 並轉換音訊格式' },
   { id: 'model_loading', name: '載入 AI 模型', description: '下載並載入 AI 分離模型' },
   { id: 'separating', name: 'AI 分離處理', description: '使用 AI 模型分離人聲與伴奏' },
+  { id: 'merging', name: '合併影片', description: '合併無聲影片與原始音訊' },
   { id: 'saving', name: '儲存資料', description: '儲存音軌與影片資料' },
 ]
 
@@ -134,26 +133,56 @@ const currentStageId = computed(() => {
 
   if (isLocalJob.value) {
     // 本地處理：根據訊息內容判斷
+    // YouTube 模式
+    if (isYouTubeSource.value) {
+      // 下載階段
+      if (msg.includes('YouTube') || msg.includes('下載影片') || msg.includes('下載音訊') || msg.includes('準備下載')) {
+        return 'downloading'
+      }
+      // 轉換音訊階段
+      if (msg.includes('載入 FFmpeg') || msg.includes('FFmpeg') || msg.includes('轉換音訊')) {
+        return 'extracting'
+      }
+      // 載入 AI 模型階段
+      if (msg.includes('下載 AI 模型') || msg.includes('AI 模型')) {
+        return 'model_loading'
+      }
+      // 分離階段
+      if (msg.includes('分離音軌') || msg.includes('區段')) {
+        return 'separating'
+      }
+      // 合併影片階段
+      if (msg.includes('合併影片') || msg.includes('合併')) {
+        return 'merging'
+      }
+      // 儲存階段
+      if (msg.includes('儲存')) {
+        return 'saving'
+      }
+      // 根據 status 備用判斷
+      if (status === 'downloading') return 'downloading'
+      if (status === 'separating') return 'separating'
+      if (status === 'merging') return 'merging'
+      return 'downloading'
+    }
+
+    // 上傳模式
     if (msg.includes('載入 FFmpeg') || msg.includes('FFmpeg')) {
       return 'extracting'
     }
     if (msg.includes('提取音頻')) {
       return 'extracting_audio'
     }
-    if (msg.includes('下載') && msg.includes('模型') || msg.includes('AI 模型')) {
+    if (msg.includes('下載 AI 模型') || msg.includes('AI 模型')) {
       return 'model_loading'
     }
-    if (msg.includes('分離音軌') || msg.includes('分離')) {
+    if (msg.includes('分離音軌') || msg.includes('區段')) {
       return 'separating'
     }
-    if (msg.includes('儲存') || msg.includes('saving')) {
+    if (msg.includes('儲存')) {
       return 'saving'
     }
-    if (msg.includes('YouTube') || msg.includes('下載影片')) {
-      return 'downloading'
-    }
     // 根據 status 備用判斷
-    if (status === 'downloading') return 'downloading'
     if (status === 'separating') return 'separating'
     if (status === 'merging') return 'saving'
     return 'extracting'
@@ -255,6 +284,9 @@ function formatElapsedTime(seconds: number): string {
   border-radius: 12px;
   width: 90%;
   max-width: 480px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
 }
 
@@ -264,6 +296,7 @@ function formatElapsedTime(seconds: number): string {
   justify-content: space-between;
   padding: 1rem 1.25rem;
   border-bottom: 1px solid #333;
+  flex-shrink: 0;
 }
 
 .modal-header h2 {
@@ -287,10 +320,15 @@ function formatElapsedTime(seconds: number): string {
 
 .modal-body {
   padding: 1.5rem;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .task-title {
   margin-bottom: 1.25rem;
+  flex-shrink: 0;
 }
 
 .title-text {
@@ -304,6 +342,7 @@ function formatElapsedTime(seconds: number): string {
   align-items: center;
   gap: 1rem;
   margin-bottom: 1.5rem;
+  flex-shrink: 0;
 }
 
 .progress-bar-large {
@@ -333,6 +372,9 @@ function formatElapsedTime(seconds: number): string {
   flex-direction: column;
   gap: 0.5rem;
   margin-bottom: 1.5rem;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .stage-item {
@@ -427,6 +469,7 @@ function formatElapsedTime(seconds: number): string {
   padding: 0.75rem 1rem;
   background: #2a2a2a;
   border-radius: 6px;
+  flex-shrink: 0;
 }
 
 .status-label {
@@ -445,6 +488,7 @@ function formatElapsedTime(seconds: number): string {
   gap: 0.75rem;
   padding: 1rem 1.25rem;
   border-top: 1px solid #333;
+  flex-shrink: 0;
 }
 
 .btn-cancel {

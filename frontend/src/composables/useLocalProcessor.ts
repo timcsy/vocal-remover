@@ -25,6 +25,7 @@ const state = ref<ProcessingState>({
   message: '',
   error: null,
   songId: undefined,
+  sourceType: undefined,
 })
 
 // 當前處理中的任務標題（用於顯示在 TaskQueue）
@@ -73,6 +74,7 @@ function resetState() {
     message: '',
     error: null,
     songId: undefined,
+    sourceType: undefined,
   }
   currentTitle.value = null
   cancelled = false
@@ -188,6 +190,7 @@ async function processUpload(
 ): Promise<string> {
   resetState()
   currentTitle.value = title
+  state.value.sourceType = 'upload'
 
   try {
     // 確保儲存服務已初始化
@@ -410,6 +413,7 @@ async function processYouTube(
 ): Promise<string> {
   resetState()
   currentTitle.value = 'YouTube 影片' // 初始標題，下載後會更新
+  state.value.sourceType = 'youtube'
 
   const backend = getBackendCapabilities()
   if (!backend.available || !backend.youtube) {
@@ -419,7 +423,7 @@ async function processYouTube(
   try {
     await storageService.init()
 
-    // ========== 階段 1：下載影片 (0-50%) ==========
+    // ========== 階段 1：下載影片 (0-30%) ==========
     updateState({
       stage: 'downloading',
       subStage: null,
@@ -429,24 +433,80 @@ async function processYouTube(
     }, options)
     checkCancelled()
 
-    const { audio, title, duration, thumbnail } = await downloadYouTube(url)
+    const { video, videoExt, audio, audioExt, title, duration, thumbnail } = await downloadYouTube(
+      url,
+      (progress, message) => {
+        const percent = sanitizeProgress(progress)
+        updateState({
+          subProgress: percent,
+          message: message || `從 YouTube 下載影片 (${percent}%)`,
+          progress: sanitizeProgress(progress * 0.3), // 0-30%
+        }, options)
+      }
+    )
     currentTitle.value = title // 更新為實際標題
     const durationStr = formatDuration(duration)
     const audioSizeStr = formatSize(audio.byteLength)
+    const totalSizeStr = formatSize(video.byteLength + audio.byteLength)
 
-    updateState({ progress: 50, message: `下載完成 - ${durationStr}` }, options)
+    updateState({ progress: 30, message: `下載完成 - ${durationStr} / ${totalSizeStr}` }, options)
+    checkCancelled()
+
+    // ========== 階段 2：提取音頻 (30-40%) ==========
+    updateState({
+      stage: 'extracting',
+      subStage: 'ffmpeg_loading',
+      progress: 30,
+      subProgress: 0,
+      message: '載入 FFmpeg 引擎...',
+    }, options)
+    checkCancelled()
+
+    // 載入 FFmpeg
+    const ffmpegAlreadyLoaded = ffmpegService.isLoaded()
+    if (!ffmpegAlreadyLoaded) {
+      await ffmpegService.initialize((p) => {
+        const subProg = sanitizeProgress(p * 100)
+        updateState({
+          subProgress: subProg,
+          message: `載入 FFmpeg 引擎 (${subProg}%)`,
+          progress: sanitizeProgress(30 + p * 5), // 30-35%
+        }, options)
+      })
+    }
+
+    updateState({
+      subStage: 'ffmpeg_extracting',
+      progress: 35,
+      subProgress: 0,
+      message: '轉換音訊格式...',
+    }, options)
+    checkCancelled()
+
+    // 將音訊轉換為 WAV（使用 ffmpeg.wasm）
+    const audioFile = new File([audio], `audio.${audioExt}`, { type: 'audio/*' })
+    const wavBuffer = await ffmpegService.extractAudio(audioFile, (p) => {
+      const subProg = sanitizeProgress(p * 100)
+      updateState({
+        subProgress: subProg,
+        message: `轉換音訊格式 (${subProg}%)`,
+        progress: sanitizeProgress(35 + p * 5), // 35-40%
+      }, options)
+    })
+
+    updateState({ progress: 40 }, options)
     checkCancelled()
 
     // 解析 WAV 為立體聲
-    const { left, right } = parseWavToStereo(audio)
+    const { left, right } = parseWavToStereo(wavBuffer)
 
-    // ========== 階段 2：音源分離 (50-95%) ==========
+    // ========== 階段 3：音源分離 (40-85%) ==========
     const modelAlreadyLoaded = demucsService.isLoaded()
     if (!modelAlreadyLoaded) {
       updateState({
         stage: 'separating',
         subStage: 'model_downloading',
-        progress: 50,
+        progress: 40,
         subProgress: 0,
         message: '下載 AI 模型 - 0/172 MB (0%)',
       }, options)
@@ -459,7 +519,7 @@ async function processYouTube(
         updateState({
           subProgress: percent,
           message: `下載 AI 模型 - ${loadedMB}/${totalMB} MB (${percent}%)`,
-          progress: sanitizeProgress(50 + (loaded / total) * 10),
+          progress: sanitizeProgress(40 + (loaded / total) * 10), // 40-50%
         }, options)
       })
     }
@@ -467,7 +527,7 @@ async function processYouTube(
     updateState({
       stage: 'separating',
       subStage: 'separating',
-      progress: 60,
+      progress: 50,
       subProgress: 0,
       message: `分離音軌 - ${durationStr} / ${audioSizeStr} (0%)`,
     }, options)
@@ -481,15 +541,38 @@ async function processYouTube(
         updateState({
           subProgress: totalProg,
           message: `分離音軌 - ${durationStr} - 區段 ${currentSegment}/${totalSegments} (${totalProg}%)`,
-          progress: sanitizeProgress(60 + progress * 35),
+          progress: sanitizeProgress(50 + progress * 35), // 50-85%
         }, options)
       }
+    })
+
+    updateState({ progress: 85 }, options)
+    checkCancelled()
+
+    // ========== 階段 4：合併影片 (85-95%) ==========
+    updateState({
+      stage: 'saving',
+      subStage: 'merging_video',
+      progress: 85,
+      subProgress: 0,
+      message: '合併影片與音訊...',
+    }, options)
+
+    // 使用 ffmpeg.wasm 合併無聲影片 + 原始音訊
+    const videoFile = new File([video], `video.${videoExt}`, { type: 'video/*' })
+    const mergedVideoBuffer = await ffmpegService.muxVideoAudio(videoFile, audioFile, (p) => {
+      const subProg = sanitizeProgress(p * 100)
+      updateState({
+        subProgress: subProg,
+        message: `合併影片與音訊 (${subProg}%)`,
+        progress: sanitizeProgress(85 + p * 10), // 85-95%
+      }, options)
     })
 
     updateState({ progress: 95 }, options)
     checkCancelled()
 
-    // ========== 階段 3：儲存 (95-100%) ==========
+    // ========== 階段 5：儲存 (95-100%) ==========
     updateState({
       stage: 'saving',
       subStage: 'saving_tracks',
@@ -516,10 +599,10 @@ async function processYouTube(
       separationResult.vocals.right
     )
 
-    // 計算儲存大小（顯示為 WAV 匯出大小：PCM + 4 個 WAV header，YouTube 沒有原始影片）
+    // 計算儲存大小（顯示為 WAV 匯出大小：PCM + 4 個 WAV header + 合併後影片）
     const wavHeaderSize = 44 * 4 // 4 音軌，每個 WAV header 44 bytes
     const storageSize = drumsBuffer.byteLength + bassBuffer.byteLength +
-      otherBuffer.byteLength + vocalsBuffer.byteLength + wavHeaderSize
+      otherBuffer.byteLength + vocalsBuffer.byteLength + mergedVideoBuffer.byteLength + wavHeaderSize
 
     const song: SongRecord = {
       id: songId,
@@ -537,6 +620,7 @@ async function processYouTube(
         other: otherBuffer,
         vocals: vocalsBuffer,
       },
+      originalVideo: mergedVideoBuffer, // 儲存合併後的影片
     }
 
     await storageService.saveSong(song)

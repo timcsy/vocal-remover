@@ -259,14 +259,15 @@ const videoUrl = ref<string | null>(null);
 
 // 設定影片 URL
 const setupVideoUrl = async () => {
-  if (backend.available) {
-    // 後端模式：使用 API 串流
-    videoUrl.value = api.getStreamUrl(props.job.id);
-  } else if (localSong.value?.originalVideo) {
-    // 本地模式：從 IndexedDB 建立 Blob URL
+  // 優先使用本地 IndexedDB 的影片
+  if (localSong.value?.originalVideo) {
     const blob = new Blob([localSong.value.originalVideo], { type: 'video/mp4' });
     videoUrl.value = URL.createObjectURL(blob);
   }
+  // 如無本地資料，才嘗試後端串流（舊版相容）
+  // else if (backend.available) {
+  //   videoUrl.value = api.getStreamUrl(props.job.id);
+  // }
 };
 
 // streamUrl 向後相容

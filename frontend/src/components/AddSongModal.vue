@@ -52,10 +52,11 @@
             <div v-if="youtubePreview" class="preview-card">
               <div class="video-container">
                 <iframe
-                  :src="`https://www.youtube.com/embed/${youtubePreview.videoId}`"
+                  :src="`https://www.youtube-nocookie.com/embed/${youtubePreview.videoId}`"
                   frameborder="0"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                   allowfullscreen
+                  credentialless
                 ></iframe>
               </div>
               <div class="preview-info">

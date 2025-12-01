@@ -2,12 +2,10 @@
  * useJobManager - 全域狀態管理
  *
  * 管理已完成歌曲列表、處理中任務列表、選中狀態、抽屜狀態等
- * 支援雙模式：
- * - 純靜態模式：從 IndexedDB 載入本地歌曲
- * - Docker 模式：從後端 API 載入 + IndexedDB 本地歌曲
+ * 所有歌曲資料儲存於 IndexedDB（純前端模式）
  */
 import { ref, computed, readonly, onMounted, onUnmounted } from 'vue'
-import { api, type CompletedJob, type ProcessingJob, getBackendCapabilities } from '@/services/api'
+import { type CompletedJob, type ProcessingJob } from '@/services/api'
 import { storageService, type SongRecord } from '@/services/storageService'
 import { useLocalProcessor } from '@/composables/useLocalProcessor'
 
@@ -35,23 +33,15 @@ async function fetchLocalSongs() {
   }
 }
 
-// 輪詢邏輯（僅 Docker 模式使用）
+// 載入歌曲列表（純前端 IndexedDB）
 async function fetchJobs() {
   try {
-    const backend = getBackendCapabilities()
-
-    // 總是載入本地歌曲
+    // 從 IndexedDB 載入本地歌曲
     await fetchLocalSongs()
 
-    // 如果後端可用，也載入後端任務
-    if (backend.available) {
-      const response = await api.getJobs()
-      completedJobs.value = response.jobs
-      processingJobs.value = response.processing
-    } else {
-      completedJobs.value = []
-      processingJobs.value = []
-    }
+    // 後端不再管理 jobs，全部使用本地儲存
+    completedJobs.value = []
+    processingJobs.value = []
 
     error.value = null
   } catch (err) {
@@ -136,19 +126,9 @@ function deselectAllJobs() {
 // 刪除歌曲
 async function deleteJob(jobId: string): Promise<boolean> {
   try {
-    // 檢查是否為本地歌曲
-    const isLocalSong = localSongs.value.some(s => s.id === jobId)
-
-    if (isLocalSong) {
-      // 從 IndexedDB 刪除
-      await storageService.deleteSong(jobId)
-      localSongs.value = localSongs.value.filter(s => s.id !== jobId)
-    } else {
-      // 從後端刪除
-      await api.deleteJob(jobId)
-      completedJobs.value = completedJobs.value.filter(j => j.id !== jobId)
-      processingJobs.value = processingJobs.value.filter(j => j.id !== jobId)
-    }
+    // 從 IndexedDB 刪除
+    await storageService.deleteSong(jobId)
+    localSongs.value = localSongs.value.filter(s => s.id !== jobId)
 
     // 取消選取
     if (selectedJobId.value === jobId) {
@@ -225,6 +205,7 @@ const localProcessingJob = computed<ProcessingJob | null>(() => {
   return {
     id: 'local-processing',
     source_title: localProcessorTitle.value || '處理中...',
+    source_type: state.sourceType,
     status: statusMap[state.stage] || 'pending',
     progress: state.progress,
     current_stage: state.message || null,
