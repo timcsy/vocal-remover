@@ -159,6 +159,19 @@ class StorageService {
   }
 
   /**
+   * 重新命名歌曲
+   */
+  async renameSong(id: string, newTitle: string): Promise<void> {
+    const song = await this.getSong(id)
+    if (!song) {
+      throw new Error('歌曲不存在')
+    }
+
+    song.title = newTitle
+    await this.saveSong(song)
+  }
+
+  /**
    * 取得儲存使用量
    */
   async getStorageUsage(): Promise<{ used: number; quota: number }> {

@@ -2,6 +2,7 @@ import { ref, reactive, computed, onUnmounted, type Ref } from 'vue';
 import * as Tone from 'tone';
 import { DEFAULT_VOLUMES, type TrackName, type TrackState } from '@/types/audio';
 import type { SongRecord } from '@/types/storage';
+import { int16BufferToStereoFloat32 } from '@/utils/format';
 
 const API_BASE = '/api/v1';
 
@@ -143,25 +144,24 @@ export function useWebAudio(options: UseWebAudioOptions): UseWebAudioReturn {
   };
 
   /**
-   * 將 ArrayBuffer (Float32 立體聲交錯) 轉換為 AudioBuffer
+   * 將 ArrayBuffer (Int16 立體聲交錯) 轉換為 AudioBuffer
    */
   const arrayBufferToAudioBuffer = async (
     buffer: ArrayBuffer,
     sampleRate: number
   ): Promise<AudioBuffer> => {
-    const float32 = new Float32Array(buffer);
-    const samplesPerChannel = float32.length / 2;
+    // 從 Int16 格式還原為 Float32
+    const { left: leftData, right: rightData } = int16BufferToStereoFloat32(buffer);
+
     const audioCtx = Tone.getContext().rawContext as AudioContext;
-    const audioBuffer = audioCtx.createBuffer(2, samplesPerChannel, sampleRate);
+    const audioBuffer = audioCtx.createBuffer(2, leftData.length, sampleRate);
 
     const left = audioBuffer.getChannelData(0);
     const right = audioBuffer.getChannelData(1);
 
-    // 解交錯：[L0, R0, L1, R1, ...] → [L0, L1, ...], [R0, R1, ...]
-    for (let i = 0; i < samplesPerChannel; i++) {
-      left[i] = float32[i * 2];
-      right[i] = float32[i * 2 + 1];
-    }
+    // 複製資料到 AudioBuffer
+    left.set(leftData);
+    right.set(rightData);
 
     return audioBuffer;
   };

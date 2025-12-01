@@ -13,6 +13,10 @@
         @select="$emit('select', $event)"
         @toggle="$emit('toggle', $event)"
         @delete="$emit('delete', $event)"
+        @deleteSelected="$emit('deleteSelected')"
+        @export="$emit('export', $event)"
+        @exportSelected="$emit('exportSelected')"
+        @rename="(id, title) => $emit('rename', id, title)"
         @selectAll="$emit('selectAll')"
         @deselectAll="$emit('deselectAll')"
       />
@@ -37,7 +41,7 @@
         + 新增歌曲
       </button>
       <div class="export-actions" v-if="hasSelectedJobs">
-        <button class="btn btn-secondary" @click="$emit('export')">
+        <button class="btn btn-secondary" @click="$emit('exportSelected')">
           匯出 ({{ selectedCount }})
         </button>
       </div>
@@ -78,10 +82,13 @@ defineEmits<{
   select: [jobId: string]
   toggle: [jobId: string]
   delete: [jobId: string]
+  deleteSelected: []
+  export: [jobId: string]
+  exportSelected: []
+  rename: [jobId: string, newTitle: string]
   selectAll: []
   deselectAll: []
   addSong: []
-  export: []
   import: []
 }>()
 

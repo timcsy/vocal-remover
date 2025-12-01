@@ -111,18 +111,19 @@ export interface Job {
   source_title: string | null;
   status: 'pending' | 'downloading' | 'separating' | 'merging' | 'completed' | 'failed';
   progress: number;
-  current_stage: string;
+  current_stage: string | null;
   error_message: string | null;
-  created_at: string;
-  expires_at: string;
+  created_at: string | Date;
+  updated_at?: string | Date;
+  expires_at?: string;
 }
 
 export type OutputFormat = 'mp4' | 'mp3' | 'm4a' | 'wav';
 
 export interface Result {
   original_duration: number;
-  output_size: number;
-  download_url: string;
+  output_size: number | null;
+  download_url: string | null;
 }
 
 export interface JobWithResult extends Job {
@@ -168,6 +169,7 @@ export interface CompletedJob {
   status: 'completed';
   original_duration: number | null;
   created_at: string;
+  storage_size?: number;
 }
 
 export interface ProcessingJob {

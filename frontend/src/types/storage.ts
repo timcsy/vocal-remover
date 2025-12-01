@@ -32,7 +32,21 @@ export interface SongRecord {
   originalVideo?: ArrayBuffer
   /** 建立時間 */
   createdAt: Date
+  /** 儲存大小（bytes） */
+  storageSize?: number
 }
+
+/**
+ * 處理子階段
+ */
+export type ProcessingSubStage =
+  | 'ffmpeg_loading'      // FFmpeg WASM 載入中
+  | 'ffmpeg_extracting'   // FFmpeg 提取音頻中
+  | 'model_downloading'   // Demucs 模型下載中
+  | 'separating'          // 分離音軌中
+  | 'saving_tracks'       // 儲存音軌
+  | 'saving_video'        // 儲存影片
+  | null
 
 /**
  * 處理進度的即時狀態（記憶體內，不持久化）
@@ -40,8 +54,14 @@ export interface SongRecord {
 export interface ProcessingState {
   /** 處理階段 */
   stage: 'idle' | 'downloading' | 'extracting' | 'separating' | 'saving'
+  /** 子階段，提供更詳細的進度資訊 */
+  subStage: ProcessingSubStage
   /** 進度 0-100 */
   progress: number
+  /** 子階段進度 0-100（用於顯示子進度條） */
+  subProgress: number
+  /** 詳細訊息 */
+  message: string
   /** 錯誤訊息 */
   error: string | null
   /** 處理完成後的 SongRecord.id */

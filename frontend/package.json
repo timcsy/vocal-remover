@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "demucs-web": "^1.0.0",
+    "jszip": "^3.10.1",
     "onnxruntime-web": "^1.23.2",
     "tone": "^14.7.77",
     "uuid": "^13.0.0",

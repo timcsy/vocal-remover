@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
+import JSZip from 'jszip';
 import { api, getBackendCapabilities, type JobWithResult, type OutputFormat } from '../services/api';
 import { storageService } from '@/services/storageService';
 import { useDownload } from '@/composables/useDownload';
+import { formatDuration, formatFileSize } from '@/utils/format';
 import ProgressBar from './ProgressBar.vue';
 import AudioMixer from './AudioMixer/AudioMixer.vue';
 import type { SongRecord } from '@/types/storage';
@@ -108,6 +110,103 @@ const startDownload = async () => {
   }
 };
 
+// ========== 匯出功能 ==========
+const isExporting = ref(false);
+
+// Int16 PCM 資料轉 WAV 檔案
+function int16ToWav(pcmData: ArrayBuffer, sampleRate: number, numChannels: number = 2): ArrayBuffer {
+  const pcmBytes = new Uint8Array(pcmData);
+  const wavHeader = 44;
+  const wavBuffer = new ArrayBuffer(wavHeader + pcmBytes.length);
+  const view = new DataView(wavBuffer);
+
+  // RIFF header
+  view.setUint32(0, 0x52494646, false); // "RIFF"
+  view.setUint32(4, 36 + pcmBytes.length, true); // file size - 8
+  view.setUint32(8, 0x57415645, false); // "WAVE"
+
+  // fmt chunk
+  view.setUint32(12, 0x666d7420, false); // "fmt "
+  view.setUint32(16, 16, true); // chunk size
+  view.setUint16(20, 1, true); // PCM format
+  view.setUint16(22, numChannels, true); // channels
+  view.setUint32(24, sampleRate, true); // sample rate
+  view.setUint32(28, sampleRate * numChannels * 2, true); // byte rate
+  view.setUint16(32, numChannels * 2, true); // block align
+  view.setUint16(34, 16, true); // bits per sample
+
+  // data chunk
+  view.setUint32(36, 0x64617461, false); // "data"
+  view.setUint32(40, pcmBytes.length, true); // data size
+
+  // PCM data
+  new Uint8Array(wavBuffer, wavHeader).set(pcmBytes);
+
+  return wavBuffer;
+}
+
+const exportSong = async () => {
+  if (!localSong.value || isExporting.value) return;
+
+  isExporting.value = true;
+  try {
+    const song = localSong.value;
+    const zip = new JSZip();
+    const sampleRate = song.sampleRate || 44100;
+
+    // 建立元資料 JSON
+    const metadata = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      song: {
+        id: song.id,
+        title: song.title,
+        sourceType: song.sourceType,
+        sourceUrl: song.sourceUrl,
+        thumbnailUrl: song.thumbnailUrl,
+        duration: song.duration,
+        sampleRate: sampleRate,
+        createdAt: song.createdAt.toISOString(),
+        storageSize: song.storageSize,
+      },
+    };
+
+    // 加入元資料
+    zip.file('metadata.json', JSON.stringify(metadata, null, 2));
+
+    // 加入音軌（WAV 格式）
+    const tracksFolder = zip.folder('tracks');
+    if (tracksFolder) {
+      tracksFolder.file('drums.wav', int16ToWav(song.tracks.drums, sampleRate));
+      tracksFolder.file('bass.wav', int16ToWav(song.tracks.bass, sampleRate));
+      tracksFolder.file('other.wav', int16ToWav(song.tracks.other, sampleRate));
+      tracksFolder.file('vocals.wav', int16ToWav(song.tracks.vocals, sampleRate));
+    }
+
+    // 加入原始影片（如果有）
+    if (song.originalVideo) {
+      zip.file('video.mp4', song.originalVideo);
+    }
+
+    // 產生 ZIP 並下載
+    const zipBlob = await zip.generateAsync({ type: 'blob' });
+    const url = URL.createObjectURL(zipBlob);
+
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${song.title || 'song'}.mix.zip`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    console.error('匯出失敗:', err);
+    alert('匯出失敗，請稍後再試');
+  } finally {
+    isExporting.value = false;
+  }
+};
+
 // 載入本地歌曲資料（純靜態模式）
 onMounted(async () => {
   // 嘗試從 IndexedDB 載入
@@ -174,19 +273,20 @@ const setupVideoUrl = async () => {
 const streamUrl = computed(() => videoUrl.value || '');
 
 const fileSizeText = computed(() => {
-  if (!props.job.result?.output_size) return '';
-  const size = props.job.result.output_size;
-  if (size < 1024) return `${size} B`;
-  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
-  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+  // 優先使用本地歌曲的原始影片大小
+  if (localSong.value?.originalVideo) {
+    return formatFileSize(localSong.value.originalVideo.byteLength);
+  }
+  // 後端返回的輸出大小
+  if (props.job.result?.output_size) {
+    return formatFileSize(props.job.result.output_size);
+  }
+  return '';
 });
 
 const durationText = computed(() => {
   if (!props.job.result?.original_duration) return '';
-  const seconds = props.job.result.original_duration;
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${mins}:${secs.toString().padStart(2, '0')}`;
+  return formatDuration(props.job.result.original_duration);
 });
 </script>
 
@@ -300,6 +400,16 @@ const durationText = computed(() => {
               {{ downloadStageText }} {{ downloadState.progress }}%
             </span>
             <span v-else>下載</span>
+          </button>
+          <button
+            v-if="localSong"
+            @click="exportSong"
+            class="download-btn export"
+            :disabled="isExporting"
+            title="匯出歌曲資料（可備份或轉移）"
+          >
+            <span v-if="isExporting">匯出中...</span>
+            <span v-else>匯出</span>
           </button>
           <button @click="emit('reset')" class="download-btn secondary">
             處理新影片
@@ -611,6 +721,15 @@ h2 {
 
 .download-btn.primary:hover {
   background: #43a047;
+}
+
+.download-btn.export {
+  background: #9c27b0;
+  color: white;
+}
+
+.download-btn.export:hover {
+  background: #7b1fa2;
 }
 
 .download-btn.secondary {

@@ -61,7 +61,10 @@ class FFmpegService {
       this.ffmpeg = FFmpeg.createFFmpeg({
         log: false,
         progress: ({ ratio }) => {
-          this.progressCallback?.(ratio)
+          // 確保 ratio 是有效數值
+          if (typeof ratio === 'number' && !isNaN(ratio) && isFinite(ratio)) {
+            this.progressCallback?.(Math.max(0, Math.min(1, ratio)))
+          }
         },
       })
 

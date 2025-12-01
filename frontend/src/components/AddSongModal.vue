@@ -68,7 +68,7 @@
               :disabled="!youtubeUrl || isSubmitting || !backend.youtube"
               @click="submitUrl"
             >
-              {{ isSubmitting ? currentProgressLabel || '處理中...' : '開始處理' }}
+              {{ isSubmitting ? currentProgressLabel : '開始處理' }}
             </button>
           </div>
 
@@ -117,10 +117,20 @@
 
             <!-- 處理進度條 -->
             <div v-if="isSubmitting && processingState.stage !== 'idle'" class="progress-container">
+              <!-- 主進度條 -->
               <div class="progress-bar">
-                <div class="progress-fill" :style="{ width: `${processingState.progress}%` }"></div>
+                <div class="progress-fill" :style="{ width: `${safeProgress}%` }"></div>
               </div>
-              <p class="progress-label">{{ currentProgressLabel }}</p>
+              <div class="progress-info">
+                <p class="progress-label">{{ currentProgressLabel }}</p>
+                <span class="progress-percent">{{ safeProgress }}%</span>
+              </div>
+              <!-- 子進度條（顯示當前子任務的細節進度） -->
+              <div v-if="showSubProgress" class="sub-progress">
+                <div class="sub-progress-bar">
+                  <div class="sub-progress-fill" :style="{ width: `${safeSubProgress}%` }"></div>
+                </div>
+              </div>
             </div>
 
             <button
@@ -128,7 +138,7 @@
               :disabled="!selectedFile || isSubmitting"
               @click="submitFile"
             >
-              {{ isSubmitting ? currentProgressLabel || '處理中...' : '開始處理' }}
+              {{ isSubmitting ? currentProgressLabel : '開始處理' }}
             </button>
 
             <!-- 取消按鈕 -->
@@ -173,20 +183,49 @@ const isDragging = ref(false)
 // 後端功能偵測
 const backend = getBackendCapabilities()
 
-// 處理進度顯示
-const progressStageLabels: Record<ProcessingState['stage'], string> = {
-  idle: '',
-  downloading: '下載影片中...',
-  extracting: '提取音頻中...',
-  separating: '分離人聲中...',
-  saving: '儲存中...',
-}
-
+// 處理進度顯示 - 使用詳細的 message 欄位
 const currentProgressLabel = computed(() => {
-  const stage = processingState.value.stage
-  if (stage === 'idle') return ''
-  const label = progressStageLabels[stage]
-  return `${label} ${Math.round(processingState.value.progress)}%`
+  const state = processingState.value
+  if (state.stage === 'idle') return ''
+
+  // 優先使用詳細訊息
+  if (state.message) {
+    return state.message
+  }
+
+  // 備用：基本階段標籤
+  const progressStageLabels: Record<ProcessingState['stage'], string> = {
+    idle: '',
+    downloading: '下載影片中',
+    extracting: '提取音頻中',
+    separating: '分離人聲中',
+    saving: '儲存中',
+  }
+  const label = progressStageLabels[state.stage]
+  return `${label}...`
+})
+
+// 安全取得進度值
+const safeProgress = computed(() => {
+  const progress = processingState.value.progress
+  if (typeof progress !== 'number' || isNaN(progress) || !isFinite(progress)) {
+    return 0
+  }
+  return Math.max(0, Math.min(100, Math.round(progress)))
+})
+
+// 安全取得子進度值
+const safeSubProgress = computed(() => {
+  const subProgress = processingState.value.subProgress
+  if (typeof subProgress !== 'number' || isNaN(subProgress) || !isFinite(subProgress)) {
+    return 0
+  }
+  return Math.max(0, Math.min(100, Math.round(subProgress)))
+})
+
+// 是否顯示子進度條
+const showSubProgress = computed(() => {
+  return processingState.value.subStage !== null && safeSubProgress.value > 0
 })
 
 // YouTube 預覽
@@ -314,38 +353,32 @@ async function submitUrl() {
     return
   }
 
-  isSubmitting.value = true
-  error.value = null
+  // 立即關閉 modal，讓處理在背景進行
+  emit('close')
 
-  try {
-    // 使用本地處理流程（透過後端下載 YouTube）
-    await processYouTube(youtubeUrl.value)
-    await refreshJobs()
-    emit('created')
-  } catch (e: any) {
-    error.value = e.message || '處理失敗'
-  } finally {
-    isSubmitting.value = false
-  }
+  // 使用本地處理流程（透過後端下載 YouTube）
+  processYouTube(youtubeUrl.value)
+    .then(() => refreshJobs())
+    .catch((e: any) => {
+      console.error('YouTube 處理失敗:', e.message || e)
+    })
 }
 
 async function submitFile() {
   if (!selectedFile.value || isSubmitting.value) return
 
-  isSubmitting.value = true
-  error.value = null
+  const file = selectedFile.value
+  const title = file.name.replace(/\.[^.]+$/, '') // 移除副檔名作為標題
 
-  try {
-    // 使用本地處理流程（純前端）
-    const title = selectedFile.value.name.replace(/\.[^.]+$/, '') // 移除副檔名作為標題
-    await processUpload(selectedFile.value, title)
-    await refreshJobs()
-    emit('created')
-  } catch (e: any) {
-    error.value = e.message || '處理失敗'
-  } finally {
-    isSubmitting.value = false
-  }
+  // 立即關閉 modal，讓處理在背景進行
+  emit('close')
+
+  // 使用本地處理流程（純前端）
+  processUpload(file, title)
+    .then(() => refreshJobs())
+    .catch((e: any) => {
+      console.error('檔案處理失敗:', e.message || e)
+    })
 }
 
 function handleFileSelect(event: Event) {
@@ -669,11 +702,48 @@ const fileSizeWarning = computed(() => {
   transition: width 0.3s ease;
 }
 
+.progress-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 0.5rem;
+}
+
 .progress-label {
   font-size: 0.8rem;
-  color: #888;
-  margin: 0.5rem 0 0;
-  text-align: center;
+  color: #e0e0e0;
+  margin: 0;
+  flex: 1;
+}
+
+.progress-percent {
+  font-size: 0.8rem;
+  color: #4a9eff;
+  font-weight: 500;
+  font-family: monospace;
+  min-width: 40px;
+  text-align: right;
+}
+
+/* 子進度條 */
+.sub-progress {
+  margin-top: 0.5rem;
+}
+
+.sub-progress-bar {
+  width: 100%;
+  height: 4px;
+  background: #333;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.sub-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #6ab4ff 0%, #8eccff 100%);
+  border-radius: 2px;
+  transition: width 0.2s ease;
+  opacity: 0.7;
 }
 
 /* 取消按鈕 */

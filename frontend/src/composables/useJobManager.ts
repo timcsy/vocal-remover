@@ -9,6 +9,7 @@
 import { ref, computed, readonly, onMounted, onUnmounted } from 'vue'
 import { api, type CompletedJob, type ProcessingJob, getBackendCapabilities } from '@/services/api'
 import { storageService, type SongRecord } from '@/services/storageService'
+import { useLocalProcessor } from '@/composables/useLocalProcessor'
 
 // 全域狀態（單例模式）
 const completedJobs = ref<CompletedJob[]>([])
@@ -125,7 +126,7 @@ function toggleJobSelection(jobId: string) {
 }
 
 function selectAllJobs() {
-  selectedJobIds.value = new Set(completedJobs.value.map(j => j.id))
+  selectedJobIds.value = new Set(allCompletedJobs.value.map(j => j.id))
 }
 
 function deselectAllJobs() {
@@ -195,6 +196,7 @@ const allCompletedJobs = computed(() => {
     status: 'completed' as const,
     original_duration: s.duration,
     created_at: s.createdAt.toISOString(),
+    storage_size: s.storageSize,
   }))
 
   // 合併並去重（本地優先）
@@ -204,8 +206,43 @@ const allCompletedJobs = computed(() => {
   return [...localAsJobs, ...backendJobs]
 })
 
+// 取得本地處理狀態
+const { state: localProcessorState, currentTitle: localProcessorTitle } = useLocalProcessor()
+
+// 將本地處理任務轉換為 ProcessingJob 格式
+const localProcessingJob = computed<ProcessingJob | null>(() => {
+  const state = localProcessorState.value
+  if (state.stage === 'idle') return null
+
+  // 將 ProcessingState.stage 映射到 ProcessingJob.status
+  const statusMap: Record<string, ProcessingJob['status']> = {
+    downloading: 'downloading',
+    extracting: 'separating', // extracting 視為 separating 的一部分
+    separating: 'separating',
+    saving: 'merging',
+  }
+
+  return {
+    id: 'local-processing',
+    source_title: localProcessorTitle.value || '處理中...',
+    status: statusMap[state.stage] || 'pending',
+    progress: state.progress,
+    current_stage: state.message || null,
+  }
+})
+
+// 合併本地和遠端的 processing jobs
+const allProcessingJobs = computed<readonly ProcessingJob[]>(() => {
+  const jobs: ProcessingJob[] = [...processingJobs.value]
+  const localJob = localProcessingJob.value
+  if (localJob) {
+    jobs.unshift(localJob) // 本地任務放在最前面
+  }
+  return jobs
+})
+
 // 是否有處理中任務
-const hasProcessingJobs = computed(() => processingJobs.value.length > 0)
+const hasProcessingJobs = computed(() => allProcessingJobs.value.length > 0)
 
 // 是否有選中的歌曲（用於匯出）
 const hasSelectedJobs = computed(() => selectedJobIds.value.size > 0)
@@ -238,7 +275,7 @@ export function useJobManager() {
     // 狀態（唯讀）
     completedJobs: allCompletedJobs, // 使用合併後的列表
     localSongs: readonly(localSongs),
-    processingJobs: readonly(processingJobs),
+    processingJobs: allProcessingJobs, // 使用合併後的列表（包含本地處理任務）
     selectedJobId: readonly(selectedJobId),
     selectedSong: readonly(selectedSong), // 完整歌曲資料
     drawerOpen: readonly(drawerOpen),

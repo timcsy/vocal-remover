@@ -6,6 +6,8 @@
  * MP3/M4A 編碼由 ffmpegService 處理
  */
 
+import { int16BufferToStereoFloat32 } from '@/utils/format'
+
 /**
  * 音訊匯出服務
  */
@@ -38,25 +40,24 @@ class AudioExportService {
   }
 
   /**
-   * 將 ArrayBuffer (Float32 立體聲) 轉換為 AudioBuffer
+   * 將 ArrayBuffer (Int16 立體聲) 轉換為 AudioBuffer
    */
   async arrayBufferToAudioBuffer(
     buffer: ArrayBuffer,
     sampleRate: number
   ): Promise<AudioBuffer> {
-    const float32 = new Float32Array(buffer)
-    const samplesPerChannel = float32.length / 2
+    // 從 Int16 格式還原為 Float32
+    const { left: leftData, right: rightData } = int16BufferToStereoFloat32(buffer)
+
     const audioCtx = new AudioContext()
-    const audioBuffer = audioCtx.createBuffer(2, samplesPerChannel, sampleRate)
+    const audioBuffer = audioCtx.createBuffer(2, leftData.length, sampleRate)
 
     const left = audioBuffer.getChannelData(0)
     const right = audioBuffer.getChannelData(1)
 
-    // 解交錯
-    for (let i = 0; i < samplesPerChannel; i++) {
-      left[i] = float32[i * 2]
-      right[i] = float32[i * 2 + 1]
-    }
+    // 複製資料到 AudioBuffer
+    left.set(leftData)
+    right.set(rightData)
 
     audioCtx.close()
     return audioBuffer
