@@ -9,10 +9,32 @@ import * as ort from 'onnxruntime-web'
 import { DemucsProcessor, CONSTANTS } from 'demucs-web'
 import type { SeparationResult } from '@/types/storage'
 import { stereoFloat32ToInt16Buffer, int16BufferToStereoFloat32 } from '@/utils/format'
+import { settingsService, isWebGPUSupported } from '@/services/settingsService'
 
 // 設定 ONNX Runtime WASM 檔案路徑
 // 使用 jsDelivr CDN（支援 CORS，版本須與 npm 一致）
 ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.23.2/dist/'
+
+/**
+ * 根據設定配置 ONNX Runtime 執行提供者
+ */
+function configureOnnxRuntime(): void {
+  const useWebGPU = settingsService.getUseWebGPU()
+
+  if (useWebGPU && isWebGPUSupported()) {
+    // 啟用 WebGPU
+    console.log('[Demucs] 使用 WebGPU 加速')
+  } else {
+    // 強制使用 WASM（停用 WebGPU）
+    // 透過環境變數停用 WebGPU
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const env = ort.env as any
+    if (env.webgpu) {
+      env.webgpu.disabled = true
+    }
+    console.log('[Demucs] 使用 WASM（CPU）模式')
+  }
+}
 
 /**
  * 模型下載進度回呼
@@ -61,6 +83,9 @@ class DemucsService {
    */
   private async loadModel(onDownloadProgress?: DownloadProgressCallback): Promise<void> {
     try {
+      // 根據設定配置 ONNX Runtime
+      configureOnnxRuntime()
+
       // 儲存下載進度回呼
       this.downloadProgressCallback = onDownloadProgress || null
 
